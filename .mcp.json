@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "aura": {
+            "command": "node",
+            "args": [
+                "c:\\Users\\punko\\.vscode\\extensions\\monticma-aura.aura-visualizer-3d-1.4.0\\out\\mcp-server.js"
+            ],
+            "env": {
+                "AURA_DB_PATH": "c:\\Users\\punko\\Downloads\\PoVoiceHud\\.aura\\graph.db"
+            },
+            "tools": ["*"]
+        }
+    }
+}

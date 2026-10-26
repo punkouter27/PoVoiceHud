@@ -2,6 +2,7 @@ artifacts/
 bin/
 obj/
 .vs/
+.aura/
 *.user
 *.suo
 TestResults/
