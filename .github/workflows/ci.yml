@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The job only reads the code; it is given nothing more.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # WinUI 3 only builds on Windows.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.0.x
+      - name: Build (warnings are errors)
+        run: dotnet build PoVoiceHud.sln --configuration Release
+      # Integration tests need a microphone model, the Credential Manager and a live endpoint: run them locally.
+      - name: Unit tests
+        run: dotnet test PoVoiceHud.sln --configuration Release --no-build --filter "Category!=Integration"

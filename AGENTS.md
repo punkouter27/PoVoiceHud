@@ -25,3 +25,9 @@
   2. Child: One sentence functional behavior summary.
   3. Adult: One sentence technical/architectural summary.
 - **Direction Questions:** After any code change over 100 lines, ask 3 optional high-level questions about the direction of the app's purpose that could trigger additional changes.
+
+## CI/CD and Azure (same section in every Po repo)
+
+- This is a desktop app: `.github/workflows/` builds and runs the tests on every push and pull request. There is nothing to deploy.
+- Tests pass on any machine: no drive-letter, temp-folder or working-directory assumptions, and no live config value hard-coded as an expected result (read it from the same config the app reads).
+- A red run on the default branch gets an ntfy push from the CI watcher in PoPunkouterSoftware. Fix it, or say why it is red.

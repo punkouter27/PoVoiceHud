@@ -47,7 +47,9 @@ public partial class App : Application
     private SettingsViewModel? _settingsPage;
     private TrayIcon? _tray;
     private DispatcherTimer? _meter;
+#pragma warning disable CS0649 // set only by the DEBUG-only --demo switch, so a Release build never assigns it
     private bool _demo;   // a layout check: no audio, and the real window placement is left alone
+#pragma warning restore CS0649
     private string? _repoToken;   // the repository token the running pipeline fetched with; a new one means fetching again
 
     public App()
