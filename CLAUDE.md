@@ -8,7 +8,7 @@ PoVoiceHud is an always-on-top WinUI 3 HUD (not a web app): it transcribes what 
 
 ## Repo facts
 
-- The only branch is `main`. Where `AGENTS.md` says "master", that means `main`.
+- The only branch is `master`.
 - Commits stay local: no remote is used for this project unless the owner says otherwise.
 - `src/PoVoiceHud.Core` holds everything testable (audio, VAD, ASR, the fact checker, view models) and never references WinUI. `src/PoVoiceHud.App` is the XAML shell. `tests/PoVoiceHud.Core.Tests` is xUnit v3 on Microsoft.Testing.Platform.
 - Build output is in `artifacts/`, not `bin/` and `obj/`.
