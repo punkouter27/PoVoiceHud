@@ -7,6 +7,10 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Fail the build on a NuGet advisory rather than emitting a warning nobody reads. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
     <!-- One output tree for every project: artifacts/bin, artifacts/obj. -->
     <UseArtifactsOutput>true</UseArtifactsOutput>
     <Platforms>x64</Platforms>
