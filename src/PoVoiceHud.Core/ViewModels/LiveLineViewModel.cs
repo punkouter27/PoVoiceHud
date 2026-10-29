@@ -9,7 +9,7 @@ namespace PoVoiceHud.Core.ViewModels;
 public enum LineState { Heard, Checking, Correct, Incorrect, CantTell, Answered }
 
 /// <summary>One line of the Live page: what was said, highlighted by its verdict once there is one.</summary>
-public sealed partial class LiveLineViewModel(TranscriptLine line) : ObservableObject
+public sealed partial class LiveLineViewModel(TranscriptLine line, SpeakerNames? names = null) : ObservableObject
 {
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(Note), nameof(HasNote))] private LineState _state;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(Note))] private string _reason = "";
@@ -18,8 +18,11 @@ public sealed partial class LiveLineViewModel(TranscriptLine line) : ObservableO
     public string Text => line.Text;
     /// <summary>The clock time it was said, in the user's short time format (as on the Facts page).</summary>
     public string Stamp => line.At.ToString("t", CultureInfo.CurrentCulture);
-    /// <summary>"You:" (the microphone) or "Them:" (the call).</summary>
-    public string Speaker => $"{line.Source.Speaker()}:";
+    /// <summary>"You:" (the microphone) or "Them:" (the call), or the names given to them.</summary>
+    public string Speaker => $"{names?.Of(line.Source) ?? line.Source.Speaker()}:";
+
+    /// <summary>The sides were renamed.</summary>
+    internal void Renamed() => OnPropertyChanged(nameof(Speaker));
 
     /// <summary>The line under the sentence: "Checking…", the verdict in plain words and its reason, or the answer from the code.</summary>
     public string Note => State switch

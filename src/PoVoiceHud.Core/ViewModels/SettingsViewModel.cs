@@ -34,6 +34,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(LookUpNote))] private bool _lookUpClaims;
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private bool _sounds;
+    /// <summary>How loud the cues are, 0–100.</summary>
+    [ObservableProperty] private double _cueVolume;
+    [ObservableProperty] private bool _callsOnly;
     /// <summary>
     /// What the last Apply found: "✓ Connected…", "✗ The key was refused…", "Checking the connection…", or "" for nothing.
     /// Never null: the page binds functions to it, and x:Bind does not call a function whose argument is null, so the dot
@@ -56,16 +59,21 @@ public sealed partial class SettingsViewModel : ObservableObject
         _lookUpClaims = settings.LookUpClaims;
         _startWithWindows = settings.StartWithWindows;
         _sounds = settings.Sounds;
+        _cueVolume = settings.CueVolume;
+        _callsOnly = settings.CallsOnly;
         _hasKey = readSecret(CredentialStore.FoundryKey) is not null;
     }
+
+    /// <summary>The build's date (YYMMDD) and version, in the page's corner.</summary>
+    public string BuildStamp { get; init; } = "";
 
     /// <summary>Applied or cancelled: the window leaves the settings.</summary>
     public event Action? Done;
 
     /// <summary>What the Wikipedia switch means for privacy.</summary>
     public string LookUpNote => LookUpClaims
-        ? "The key words of each claim go to Wikipedia's search, and the verdict can link the article it used."
-        : "Claims are judged from the model's own knowledge; nothing goes to Wikipedia.";
+        ? "The key words of each claim go to Wikipedia's and Wikidata's search (and, for a claim about the present, a news search), and the verdict can link what it used."
+        : "Claims are judged from the model's own knowledge; nothing goes to Wikipedia, Wikidata or the news search.";
 
     public Settings ToSettings() => _original with
     {
@@ -74,6 +82,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         LookUpClaims = LookUpClaims,
         StartWithWindows = StartWithWindows,
         Sounds = Sounds,
+        CueVolume = (int)Math.Round(Math.Clamp(CueVolume, 0, 100)),
+        CallsOnly = CallsOnly,
     };
 
     /// <summary>The endpoint or key cannot be used (or was never set): the app stays in Settings until Apply succeeds.</summary>
@@ -93,6 +103,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         LookUpClaims = _original.LookUpClaims;
         StartWithWindows = _original.StartWithWindows;
         Sounds = _original.Sounds;
+        CueVolume = _original.CueVolume;
+        CallsOnly = _original.CallsOnly;
         if (!RequiresSetup) Message = "";
     }
 
@@ -146,14 +158,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         var typedToken = Blank(RepositoryToken);
         if (repository is not null && (repository != _original.Repository || typedToken is not null))
         {
-            Message = "Reading the repository…";
-            var probe = await _probeRepository(repository, typedToken ?? _readSecret(CredentialStore.RepoToken));
-            if (!probe.StartsWith('✓'))
+            // Each repository is read; the first that cannot be stops Apply, saying which.
+            var locations = RepoSource.Locations(repository);
+            foreach (var location in locations)
             {
-                Message = probe;
-                return;
+                Message = locations.Count == 1 ? "Reading the repository…" : $"Reading {RepoSource.NameOf(location)}…";
+                var probe = await _probeRepository(location, typedToken ?? _readSecret(CredentialStore.RepoToken));
+                if (!probe.StartsWith('✓'))
+                {
+                    Message = locations.Count == 1 ? probe : $"{RepoSource.NameOf(location)}: {probe}";
+                    return;
+                }
+                found.Add(locations.Count == 1 ? probe : $"✓ {RepoSource.NameOf(location)}: {probe.TrimStart('✓', ' ')}");
             }
-            found.Add(probe);
         }
 
         // The key first: applying the settings builds a fact checker, which reads it.

@@ -221,15 +221,49 @@ public class FactCheckerTests
     }
 
     [Fact]
+    public async Task Wikidata_gives_the_named_things_numbers_and_dates_and_news_comes_only_for_claims_about_now()
+    {
+        var handler = new FakeHttpHandler(request => FakeHttpHandler.Json(request.RequestUri!.ToString() switch
+        {
+            var u when u.Contains("wbsearchentities", StringComparison.Ordinal) => """{"search":[{"id":"Q243"}]}""",
+            var u when u.Contains("ids=Q243", StringComparison.Ordinal) => """
+                {"entities":{"Q243":{"labels":{"en":{"value":"Eiffel Tower"}},"descriptions":{"en":{"value":"tower in Paris"}},"claims":{
+                  "P2048":[{"rank":"normal","mainsnak":{"datavalue":{"type":"quantity","value":{"amount":"+330","unit":"http://www.wikidata.org/entity/Q11573"}}}}],
+                  "P571":[{"rank":"normal","mainsnak":{"datavalue":{"type":"time","value":{"time":"+1889-03-31T00:00:00Z","precision":11}}}}],
+                  "P17":[{"rank":"normal","mainsnak":{"datavalue":{"type":"wikibase-entityid","value":{"id":"Q142"}}}}]}}}}
+                """,
+            var u when u.Contains("wbgetentities", StringComparison.Ordinal) => """{"entities":{"Q11573":{"labels":{"en":{"value":"metre"}}},"Q142":{"labels":{"en":{"value":"France"}}}}}""",
+            _ => """{"articles":[{"url":"https://example.com/ceo","title":"Acme names new CEO","seendate":"20261027T143000Z","domain":"example.com"}]}""",
+        }));
+        var http = new HttpClient(handler);
+
+        var tower = Assert.Single(await new WikidataEvidence(http).FindAsync("The Eiffel Tower is 330 metres tall", _ct));
+        Assert.Equal("https://www.wikidata.org/wiki/Q243", tower.Url.ToString());
+        Assert.Equal("Eiffel Tower (tower in Paris). country: France; height: 330 metre; inception: 1889-03-31.", tower.Text);
+        Assert.Contains("search=Eiffel%20Tower", handler.Requests[0].RequestUri!.AbsoluteUri);   // the names, not the whole sentence
+
+        Assert.Empty(await new NewsEvidence(http).FindAsync("Acme was founded in 1990", _ct));      // not about now: no news search
+        var news = Assert.Single(await new NewsEvidence(http).FindAsync("Jane Doe is the current CEO of Acme", _ct));
+        Assert.Equal("News headline from example.com, 2026-10-27: Acme names new CEO", news.Text);
+
+        // Every source at once, in order; one that fails gives nothing rather than failing the rest.
+        var broken = new HttpClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)));
+        var all = await new CombinedEvidence(new WikidataEvidence(broken), new WikidataEvidence(http)).FindAsync("The Eiffel Tower is tall", _ct);
+        Assert.Equal("Eiffel Tower (Wikidata)", Assert.Single(all).Title);
+    }
+
+    [Fact]
     public async Task Foundry_client_posts_the_fixed_model_with_the_verdict_schema_and_reads_the_content()
     {
         const string recorded = """
             { "id": "chatcmpl-1", "object": "chat.completion", "model": "gpt-4.1-mini",
               "choices": [ { "index": 0, "finish_reason": "stop",
-                "message": { "role": "assistant", "content": "{\"verdict\":\"supported\",\"reason\":\"ok\",\"source\":\"\"}" } } ] }
+                "message": { "role": "assistant", "content": "{\"verdict\":\"supported\",\"reason\":\"ok\",\"source\":\"\"}" } } ],
+              "usage": { "prompt_tokens": 90, "completion_tokens": 30, "total_tokens": 120 } }
             """;
         var handler = new FakeHttpHandler(_ => FakeHttpHandler.Json(recorded));
-        var client = new FoundryClient(new HttpClient(handler), new Uri("https://acme.services.ai.azure.com"), "foundry-key");
+        var stats = new ModelStats();
+        var client = new FoundryClient(new HttpClient(handler), new Uri("https://acme.services.ai.azure.com"), "foundry-key", stats: stats);
 
         var content = await client.CompleteAsync("You are a fact checker.", "Claim: x", _ct);
 
@@ -242,13 +276,20 @@ public class FactCheckerTests
         Assert.Equal("json_schema", body.RootElement.GetProperty("response_format").GetProperty("type").GetString());
         Assert.Equal("Claim: x", body.RootElement.GetProperty("messages")[1].GetProperty("content").GetString());
         Assert.Equal(0, body.RootElement.GetProperty("temperature").GetDouble());
+        // The model reasons before it decides: the verdict comes after the claim, reason and source, then how sure it is.
+        var order = body.RootElement.GetProperty("response_format").GetProperty("json_schema").GetProperty("schema").GetProperty("properties")
+            .EnumerateObject().Select(p => p.Name);
+        Assert.Equal(["claim", "reason", "source", "verdict", "confidence"], order);
+        Assert.StartsWith("1 model call · ", stats.Summary);
+        Assert.Contains("120 tokens", stats.Summary);
 
         // A body that is not a chat completion reads as empty text; an HTTP failure surfaces as HttpRequestException.
         var odd = new FoundryClient(new HttpClient(new FakeHttpHandler(_ => FakeHttpHandler.Json("{ \"error\": \"nope\" }"))), new Uri("https://acme.services.ai.azure.com"), "k");
         Assert.Equal("", await odd.CompleteAsync("s", "u", _ct));
         var refused = new FoundryClient(new HttpClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized))),
-            new Uri("https://acme.services.ai.azure.com"), "bad");
+            new Uri("https://acme.services.ai.azure.com"), "bad", stats: stats);
         await Assert.ThrowsAsync<HttpRequestException>(() => refused.CompleteAsync("s", "u", _ct));
+        Assert.EndsWith("1 failed", stats.Summary);
         var filter = new FoundryClient(new HttpClient(new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
             { Content = new StringContent("""{"error":{"code":"content_filter","status":400}}""") })), new Uri("https://acme.services.ai.azure.com"), "k");
         await Assert.ThrowsAsync<ContentFilteredException>(() => filter.CompleteAsync("s", "u", _ct));

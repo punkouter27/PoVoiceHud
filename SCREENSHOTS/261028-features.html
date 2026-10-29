@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoVoiceHud 261028</title>
+<style>
+  :root { --bg: #fafafa; --fg: #1b1b1b; --muted: #5f5f5f; --card: #fff; --line: #e3e3e3; --accent: #0f6cbd; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1c1c; --fg: #f0f0f0; --muted: #b0b0b0; --card: #262626; --line: #3a3a3a; --accent: #62abf5; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  p.lede { color: var(--muted); margin: 0 0 24px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  h2 { font-size: 17px; margin: 0 0 8px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pair figure { margin: 0; }
+  .pair img { width: 100%; border: 1px solid var(--line); border-radius: 4px; }
+  figcaption { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+  ul { margin: 8px 0 0; padding-left: 20px; }
+  .solo { max-width: 480px; }
+  .solo img { width: 100%; border: 1px solid var(--line); border-radius: 4px; }
+  @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>PoVoiceHud, 28 Oct 2026</h1>
+  <p class="lede">Before and after, from the <code>--demo</code> window. All pairs in one image: <a href="261028-features.png">261028-features.png</a>.</p>
+
+  <section>
+    <h2>Header and Live</h2>
+    <img src="261028-features.png" alt="All pages before and after" style="width:100%;border:1px solid var(--line);border-radius:4px">
+    <ul>
+      <li><b>Header:</b> a trend line of the share found correct after each recent verdict (red when most are wrong); its tooltip has the counts and the model's calls, average time, tokens, retries and failures. A compact button sits next to ⚙.</li>
+      <li><b>Animations:</b> the level bars breathe while a claim is checked, the newest line slides in, and an incorrect claim washes the header red.</li>
+      <li><b>Pages:</b> a fourth tab, <b>History</b>; "Code facts" is now "Code" to make room. <b>Names</b> renames You and Them for the call.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Facts and Code</h2>
+    <ul>
+      <li>A filter by words or a speaker's name, and by kind (correct, incorrect, answers, said by you or them). Copy copies what is shown.</li>
+      <li>A thin bar under each row for how sure the model was (it now gives a 0–1 confidence after its verdict).</li>
+      <li>Code rows: an icon for each file's kind, and the repository's name when several are connected.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Settings</h2>
+    <ul>
+      <li>Code repositories, one per line (one token for all).</li>
+      <li>"Look claims up" now asks Wikipedia, Wikidata and (for claims about the present) GDELT news at once.</li>
+      <li>New: Listen only during calls, Cue volume, and the build stamp (YYMMDD and version) in the corner.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>History (new)</h2>
+    <ul>
+      <li>Any day from the session log, searchable. <b>Summary</b> asks the model for main points, decisions, corrections, open questions and the code; muting after a conversation does the same in the background.</li>
+      <li><b>Export</b> writes <code>Documents\PoVoiceHud\Meeting {date}.md</code> and opens it.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Compact (new)</h2>
+    <div class="solo"><img src="261028-compact.png" alt="The window as just its header"></div>
+  </section>
+</main>
+</body>
+</html>

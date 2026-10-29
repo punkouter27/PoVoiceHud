@@ -15,13 +15,27 @@ public sealed partial class FactViewModel : ObservableObject
     /// <summary>When it was last said, as a clock time: a repeat moves the row to the top, so it shows the repeat's time.</summary>
     [ObservableProperty] private string _time;
 
-    public FactViewModel(Insight insight, DateTimeOffset at, SourceHint source, Func<Uri, Task> openUri)
+    private readonly SpeakerNames? _names;
+
+    public FactViewModel(Insight insight, DateTimeOffset at, SourceHint source, Func<Uri, Task> openUri, SpeakerNames? names = null)
     {
         _insight = insight;
+        _names = names;
         _time = Clock(at);
-        Speaker = source.Speaker();
+        Source = source;
         OpenLinkCommand = new AsyncRelayCommand(() => insight.Link is null ? Task.CompletedTask : openUri(insight.Link));
     }
+
+    public SourceHint Source { get; }
+
+    /// <summary>How sure the model was, 0–1: the thin bar under the reason.</summary>
+    public double Confidence => _insight.Confidence;
+
+    /// <summary>"Model confidence: 85%".</summary>
+    public string ConfidenceText => $"Model confidence: {Confidence:P0}";
+
+    /// <summary>The sides were renamed.</summary>
+    internal void Renamed() => OnPropertyChanged(nameof(Speaker));
 
     public string Claim => _insight.Claim;
     public Verdict Verdict => _insight.Verdict;
@@ -30,8 +44,8 @@ public sealed partial class FactViewModel : ObservableObject
     public string Reason => _insight.Reason;
     /// <summary>The claim, and how many times it was said when more than once.</summary>
     public string Title => Claim + (Count > 1 ? $" ×{Count}" : "");
-    /// <summary>"You" or "Them".</summary>
-    public string Speaker { get; }
+    /// <summary>"You" or "Them", or the names given to them.</summary>
+    public string Speaker => _names?.Of(Source) ?? Source.Speaker();
     public bool HasLink => _insight.Link is not null;
 
     /// <summary>

@@ -5,7 +5,7 @@ using NAudio.Wave;
 namespace PoVoiceHud.Core.Audio;
 
 /// <summary>The moments that have a sound.</summary>
-public enum Cue { Supported, Contradicted, Unverified, Muted, Unmuted }
+public enum Cue { Supported, Contradicted, Unverified, Answer, Muted, Unmuted }
 
 /// <summary>
 /// Short FM-synthesized cues on the default output, rendered once and replayed. Every buffer is cut at
@@ -34,17 +34,23 @@ public static class SoundPalette
         Cue.Contradicted => [new(0, 210, 220, 214, 1.41, 3, 0.16), new(0, 210, 233.1, 226, 1.41, 3, 0.12)],
         // two glassy ticks: not sure
         Cue.Unverified => [new(0, 45, 1760, 1760, 3.5, 4, 0.1), new(65, 45, 1568, 1568, 3.5, 4, 0.08)],
+        // one soft bell, a little sparkle on top: the code has an answer
+        Cue.Answer => [new(0, 200, 1046.5, 1046.5, 1, 0.8, 0.12), new(30, 170, 1568, 1568, 1, 0.5, 0.05)],
         Cue.Muted => [new(0, 150, 880, 440, 1, 1.2, 0.14)],
         _ => [new(0, 150, 440, 880, 1, 1.2, 0.14)],   // unmuted
     };
 
-    /// <summary>Plays <paramref name="cue"/> panned −1 (left) … 1 (right); returns at once.</summary>
+    /// <summary>How loud the cues play, 0 (silent) to 1 (as rendered): the Settings slider.</summary>
+    public static float Volume { get; set; } = 1;
+
+    /// <summary>Plays <paramref name="cue"/> panned −1 (left) … 1 (right) at <see cref="Volume"/>; returns at once.</summary>
     public static void Play(Cue cue, float pan = 0)
     {
+        if (Volume <= 0) return;
         var mono = Rendered[cue];
         // Equal-power pan, so a cue sounds as loud on either side as in the middle.
         var angle = (Math.Clamp(pan, -1, 1) + 1) * Math.PI / 4;
-        var (left, right) = ((float)Math.Cos(angle), (float)Math.Sin(angle));
+        var (left, right) = ((float)Math.Cos(angle) * Volume, (float)Math.Sin(angle) * Volume);
         var bytes = new byte[mono.Length * 4];
         for (var i = 0; i < mono.Length; i++)
         {

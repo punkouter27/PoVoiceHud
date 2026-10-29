@@ -170,6 +170,37 @@ public class CodeRepositoryTests
         Assert.Contains(code.Index.Symbols, s => s.Name == "PaymentController");
         Assert.Contains("src/Api/PaymentController.cs", code.Paths);
 
+        // A saved file (no commit) is read again on its own, and search finds what it says now.
+        Assert.Empty(code.Search("refunds go through braintree", 3));
+        var saved = new TaskCompletionSource();
+        code.Changed += () => saved.TrySetResult();
+        repo.Write("src/Api/PaymentController.cs", "public class PaymentController { /* refunds go through Braintree */ }");
+        await saved.Task.WaitAsync(TimeSpan.FromSeconds(5), _ct);
+        Assert.Equal("src/Api/PaymentController.cs", code.Search("refunds go through braintree", 3)[0].Path);
+
         Assert.Throws<ArgumentException>(() => new CodeRepository(Path.GetTempPath(), "temp", path => new Uri("https://example.com/")));
+    }
+
+    [Fact]
+    public async Task With_several_repositories_a_sentence_goes_to_the_one_it_is_about()
+    {
+        using var site = TempRepo.WithSampleProject();
+        using var shop = TempRepo.WithSampleProject();
+        shop.Write("src/Basket/CheckoutPipeline.cs", "public class CheckoutPipeline { }");
+        shop.Commit("Add checkout", DateTimeOffset.UtcNow);
+        using var siteCode = Open(site);
+        using var shopCode = new CodeRepository(shop.Root, "AcmeShop", path => new Uri($"https://github.com/acme/shop/blob/HEAD/{path}"));
+        var model = new FakeModel(_ => """{"kind":"question","topic":"t","evidence":"","text":"x","verdict":"","confidence":0.8,"files":[]}""");
+        var answerer = new CodeAnswerer(model, [siteCode, shopCode]);
+
+        Assert.Same(shopCode, answerer.Pick("What does the acme shop do at checkout?"));     // its name
+        Assert.Same(shopCode, answerer.Pick("Is the checkout pipeline async?"));             // a class only it has
+        Assert.Same(siteCode, answerer.Pick("Tell me about the code."));                     // nothing to go on: the first
+        Assert.True(answerer.IsAbout("Is the checkout pipeline async?"));
+
+        var fact = await answerer.AskAsync("Is the checkout pipeline async?", [], _ct);
+        Assert.Equal(("AcmeShop", 0.8), (fact?.Repository, fact?.Confidence));   // named, since there are two
+        using var sent = JsonDocument.Parse(model.Messages[0]);
+        Assert.Equal("AcmeShop", sent.RootElement.GetProperty("repository").GetString());
     }
 }

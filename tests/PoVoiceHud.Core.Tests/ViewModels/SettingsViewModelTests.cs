@@ -58,7 +58,7 @@ public class SettingsViewModelTests
         Assert.Equal("", vm.Key);
         Assert.False(vm.Sounds);
         Assert.True(vm.LookUpClaims);
-        Assert.Contains("Wikipedia's search", vm.LookUpNote);
+        Assert.Contains("Wikipedia's and Wikidata's search", vm.LookUpNote);
 
         _secrets.Clear();
         Assert.False(Build().HasKey);

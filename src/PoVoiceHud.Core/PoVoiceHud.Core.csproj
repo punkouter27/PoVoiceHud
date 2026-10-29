@@ -3,6 +3,8 @@
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <!-- LibraryImport source generator (Credential Manager) emits unsafe stubs. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Trimming and Native AOT analyzers: reflection-based JSON and the like fail the build here rather than at run time. -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Core" />

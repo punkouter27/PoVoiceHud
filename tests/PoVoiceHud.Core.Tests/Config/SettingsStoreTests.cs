@@ -14,6 +14,7 @@ public class SettingsStoreTests : IDisposable
         {
             FoundryEndpoint = "https://acme.services.ai.azure.com", LookUpClaims = false, StartWithWindows = true,
             Sounds = false, WhisperThreads = 4, Vocabulary = "Contoso, PMIS", UpdateFeed = @"\\share\PoVoiceHud\releases",
+            CueVolume = 40, CallsOnly = true, Repository = "https://github.com/acme/site\nC:\\src\\shop",
         };
 
         SettingsStore.Save(s, File_);
@@ -44,6 +45,9 @@ public class SettingsStoreTests : IDisposable
 
         Assert.Null(warning);
         Assert.Equal("https://acme.services.ai.azure.com", loaded.FoundryEndpoint);
+        // Keys the old file does not have keep their defaults rather than becoming false or 0.
+        Assert.Equal(new Settings { FoundryEndpoint = loaded.FoundryEndpoint }, loaded);
+        Assert.Equal(100, loaded.CueVolume);
     }
 
     [Fact]

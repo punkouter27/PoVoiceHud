@@ -190,6 +190,59 @@ public class HudViewModelTests
         _vm.ResetChecking();
         Assert.Equal(LineState.Heard, _vm.Live[1].State);
         Assert.False(_vm.IsChecking);
+
+        // Named for this call: every row says the new name at once; a blank name is "Them" again.
+        _vm.Push(new Checked(theirs, Judged("second line here", Verdict.Supported)));
+        var renamed = new List<string?>();
+        _vm.Live[1].PropertyChanged += (_, e) => renamed.Add(e.PropertyName);
+        _vm.Names.Them = "Alex";
+        Assert.Equal(("Alex:", "Alex"), (_vm.Live[1].Speaker, _vm.Facts[0].Speaker));
+        Assert.Contains(nameof(LiveLineViewModel.Speaker), renamed);
+        _vm.Names.Them = " ";
+        Assert.Equal("Them:", _vm.Live[1].Speaker);
+    }
+
+    [Fact]
+    public void The_lists_filter_by_words_kind_or_speaker_and_the_header_follows_each_verdict()
+    {
+        var cues = new List<Cue>();
+        _vm.Arrived += cues.Add;
+        var said = new[]
+        {
+            (Line("Paris is in France.", 1), Verdict.Supported),
+            (Line("The Moon is bigger than Earth.", 2, SourceHint.Teams), Verdict.Contradicted),
+            (Line("Water boils at 100 degrees.", 3), Verdict.Supported),
+        };
+        foreach (var (line, verdict) in said)
+        {
+            _vm.AddTranscript(line);
+            _vm.Push(new Checked(line, Judged(line.Text.TrimEnd('.'), verdict)));
+        }
+        var question = Line("How many pages are on our website?", 4);
+        _vm.AddTranscript(question);
+        _vm.PushCode(new CodeChecked(question, new CodeFact("How many pages are on the website", null, "Nine.", [], "site", 0.7)));
+
+        Assert.Equal([Cue.Supported, Cue.Contradicted, Cue.Supported, Cue.Answer], cues);   // an answer has its own sound
+        Assert.Equal([1, 0.5, 2 / 3.0], _vm.Trend);                                           // share correct after each verdict
+        Assert.Equal(3, _vm.ShownFacts.Count);
+
+        _vm.FilterText = "moon";
+        Assert.Equal("The Moon is bigger than Earth", Assert.Single(_vm.ShownFacts).Claim);
+        _vm.FilterText = "";
+        _vm.FilterKind = 1;   // correct
+        Assert.Equal(["Water boils at 100 degrees", "Paris is in France"], _vm.ShownFacts.Select(f => f.Claim));
+        Assert.Empty(_vm.ShownCodeFacts);
+        _vm.FilterKind = 5;   // said by them
+        Assert.Equal("The Moon is bigger than Earth", Assert.Single(_vm.ShownFacts).Claim);
+        _vm.FilterKind = 3;   // answers
+        Assert.Equal(0.7, Assert.Single(_vm.ShownCodeFacts).Confidence);
+        Assert.Empty(_vm.ShownFacts);
+        Assert.Equal("Nothing matches the filter.", _vm.NoFactsHint);
+        _vm.FilterKind = 0;
+        Assert.Equal(3, _vm.ShownFacts.Count);
+
+        _vm.ToggleCompactCommand.Execute(null);
+        Assert.True(_vm.IsCompact);
     }
 
     [Theory]
@@ -223,5 +276,10 @@ public class HudViewModelTests
 
         _vm.ToggleMuteCommand.Execute(null);
         Assert.Equal("Listening", _vm.Headline);
+
+        // "Listen only during calls" knows a call app by the process recording; this app and a music player are not calls.
+        Assert.Equal("Teams", CallDetector.Find(["PoVoiceHud.App", "ms-teams"]));
+        Assert.Equal("Zoom", CallDetector.Find(["Zoom"]));
+        Assert.Null(CallDetector.Find(["Spotify", "PoVoiceHud.App"]));
     }
 }

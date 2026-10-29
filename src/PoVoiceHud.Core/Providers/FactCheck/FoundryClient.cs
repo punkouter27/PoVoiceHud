@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Net;
-using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Polly;
 
 namespace PoVoiceHud.Core.Providers.FactCheck;
@@ -20,9 +22,14 @@ public sealed class ContentFilteredException : Exception
 /// /models/chat/completions?api-version=… appended and the key goes in the api-key header. The model is fixed, and the
 /// reply is held to the verdict schema. Each attempt has its own time limit and transient failures are retried.
 /// </summary>
-/// <param name="responseFormat">The JSON schema the reply is held to: the fact checker's verdict unless another is given (<see cref="Repos.CodeAnswerer.ReplyFormat"/>).</param>
+/// <param name="responseFormat">
+/// The JSON schema the reply is held to, as JSON: the fact checker's verdict unless another is given
+/// (<see cref="Repos.CodeAnswerer.ReplyFormat"/>).
+/// </param>
+/// <param name="stats">Where each call's time, tokens, retries and failures are counted, if anywhere.</param>
+/// <param name="maxTokens">The longest reply: a verdict needs 300; a meeting's summary more.</param>
 public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey, ResiliencePipeline? retry = null, TimeSpan? timeout = null,
-    object? responseFormat = null) : ILanguageModel
+    string? responseFormat = null, ModelStats? stats = null, int maxTokens = 300) : ILanguageModel
 {
     /// <summary>
     /// ~1–1.5 s per verdict on a GlobalStandard deployment, and it honours the JSON schema natively. The resource must have
@@ -31,35 +38,28 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
     public const string Model = "gpt-4.1-mini";
 
     private const string ApiVersion = "2024-05-01-preview";
-    private const int MaxTokens = 300;
 
-    /// <summary>The verdict shape <see cref="FactChecker"/> reads; the server enforces it.</summary>
-    private static readonly object VerdictFormat = new
-    {
-        type = "json_schema",
-        json_schema = new
-        {
-            name = "verdict",
-            strict = true,
-            schema = new
-            {
-                type = "object",
-                properties = new
-                {
-                    verdict = new { type = "string", @enum = new[] { "supported", "contradicted", "unverified", "not_a_claim" } },
-                    claim = new { type = "string" },
-                    reason = new { type = "string" },
-                    source = new { type = "string" },
-                },
-                required = new[] { "verdict", "claim", "reason", "source" },
-                additionalProperties = false,
-            },
-        },
-    };
+    /// <summary>
+    /// The verdict shape <see cref="FactChecker"/> reads; the server enforces it. The model writes the properties in this
+    /// order, so it restates the claim, gives its reason and source, and only then decides.
+    /// </summary>
+    public const string VerdictFormat = """
+        {"type": "json_schema", "json_schema": {"name": "verdict", "strict": true, "schema": {
+          "type": "object",
+          "properties": {
+            "claim": {"type": "string"},
+            "reason": {"type": "string"},
+            "source": {"type": "string"},
+            "verdict": {"type": "string", "enum": ["supported", "contradicted", "unverified", "not_a_claim"]},
+            "confidence": {"type": "number"}
+          },
+          "required": ["claim", "reason", "source", "verdict", "confidence"],
+          "additionalProperties": false}}}
+        """;
 
     private readonly ResiliencePipeline _retry = retry ?? Resilience.Default;
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(8);
-    private readonly object _format = responseFormat ?? VerdictFormat;
+    private readonly string _format = responseFormat ?? VerdictFormat;
 
     /// <summary>The resource root: an https URL.</summary>
     public static bool IsValidEndpoint(string? endpoint) => Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && uri.Scheme == "https";
@@ -71,34 +71,51 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
         endpoint.AbsolutePath is "" or "/" ? new Uri(endpoint, $"/models/chat/completions?api-version={ApiVersion}") : endpoint;
 
     /// <summary>Throws HttpRequestException on transport/HTTP failure and TimeoutException when an attempt gets no reply in time.</summary>
-    public async Task<string> CompleteAsync(string system, string user, CancellationToken ct) =>
-        await _retry.ExecuteAsync(async token =>
+    public async Task<string> CompleteAsync(string system, string user, CancellationToken ct)
+    {
+        var body = new JsonObject
         {
-            using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
-            limit.CancelAfter(_timeout);
-            try
+            ["model"] = Model,
+            ["messages"] = new JsonArray(
+                new JsonObject { ["role"] = "system", ["content"] = system },
+                new JsonObject { ["role"] = "user", ["content"] = user }),
+            ["temperature"] = 0,
+            ["max_tokens"] = maxTokens,
+            ["response_format"] = JsonNode.Parse(_format),
+        }.ToJsonString();
+        var clock = Stopwatch.StartNew();
+        var attempts = 0;
+        try
+        {
+            var (text, tokens) = await _retry.ExecuteAsync(async token =>
             {
-                var body = new Dictionary<string, object>
+                if (attempts++ > 0) stats?.Retried();
+                using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
+                limit.CancelAfter(_timeout);
+                try
                 {
-                    ["model"] = Model,
-                    ["messages"] = new object[] { new { role = "system", content = system }, new { role = "user", content = user } },
-                    ["temperature"] = 0,
-                    ["max_tokens"] = MaxTokens,
-                    ["response_format"] = _format,
-                };
-                using var request = new HttpRequestMessage(HttpMethod.Post, Resolve(endpoint)) { Content = JsonContent.Create(body) };
-                if (!string.IsNullOrEmpty(apiKey)) request.Headers.Add("api-key", apiKey);
-                using var response = await http.SendAsync(request, limit.Token);
-                return await ReadAsync(response, limit.Token);
-            }
-            catch (OperationCanceledException) when (!token.IsCancellationRequested)
-            {
-                throw new TimeoutException($"No reply from {endpoint.Host} within {_timeout.TotalSeconds:0} s.");
-            }
-        }, ct);
+                    using var request = new HttpRequestMessage(HttpMethod.Post, Resolve(endpoint)) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+                    if (!string.IsNullOrEmpty(apiKey)) request.Headers.Add("api-key", apiKey);
+                    using var response = await http.SendAsync(request, limit.Token);
+                    return await ReadAsync(response, limit.Token);
+                }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"No reply from {endpoint.Host} within {_timeout.TotalSeconds:0} s.");
+                }
+            }, ct);
+            stats?.Record(clock.Elapsed, tokens);
+            return text;
+        }
+        catch (Exception e) when (e is HttpRequestException or TimeoutException)
+        {
+            stats?.Failed();
+            throw;
+        }
+    }
 
-    /// <summary>The assistant text, or "" when the body is not the expected shape (the caller treats that as unreadable).</summary>
-    private static async Task<string> ReadAsync(HttpResponseMessage response, CancellationToken ct)
+    /// <summary>The assistant text ("" when the body is not the expected shape: the caller treats that as unreadable), and the tokens used.</summary>
+    private static async Task<(string Text, int Tokens)> ReadAsync(HttpResponseMessage response, CancellationToken ct)
     {
         // Azure's content filter refuses some sentences (one that sounds like a jailbreak, say) with a 400: about that sentence, not the service.
         if (response.StatusCode == HttpStatusCode.BadRequest && (await response.Content.ReadAsStringAsync(ct)).Contains("\"content_filter\"", StringComparison.Ordinal))
@@ -106,16 +123,19 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
         response.EnsureSuccessStatusCode();
         try
         {
-            var body = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
-            return body.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0
-                   && choices[0].TryGetProperty("message", out var message) && message.TryGetProperty("content", out var content)
-                   && content.ValueKind == JsonValueKind.String
+            using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            var body = doc.RootElement;
+            var tokens = body.TryGetProperty("usage", out var usage) && usage.TryGetProperty("total_tokens", out var total) && total.TryGetInt32(out var n) ? n : 0;
+            var text = body.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0
+                       && choices[0].TryGetProperty("message", out var message) && message.TryGetProperty("content", out var content)
+                       && content.ValueKind == JsonValueKind.String
                 ? content.GetString()!
                 : "";
+            return (text, tokens);
         }
         catch (JsonException)
         {
-            return "";
+            return ("", 0);
         }
     }
 }

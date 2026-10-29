@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -76,7 +75,8 @@ public sealed partial class WikipediaEvidence(HttpClient http) : IEvidenceSource
         request.Headers.UserAgent.ParseAdd("PoVoiceHud/1.1 (Windows desktop fact-check HUD)");
         using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
+        using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        var body = doc.RootElement;
 
         if (!body.TryGetProperty("query", out var result) || !result.TryGetProperty("pages", out var pages) || pages.ValueKind != JsonValueKind.Array)
             return [];

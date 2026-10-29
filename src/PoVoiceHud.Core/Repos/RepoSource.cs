@@ -14,6 +14,13 @@ public static partial class RepoSource
     /// <summary>Clones of remote repositories live here, one folder per repository.</summary>
     public static string CacheDir { get; } = Path.Combine(Config.AppPaths.DataDir, "repos");
 
+    /// <summary>
+    /// The repositories in the setting: one per line (or separated by ";"), so several can be connected at once. The one
+    /// access token is used for each.
+    /// </summary>
+    public static IReadOnlyList<string> Locations(string? setting) =>
+        (setting ?? "").Split([';', '\r', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>An https git URL. Plain http is refused: the access token travels with every request.</summary>
     public static bool IsRemote(string? location) => Uri.TryCreate(location, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
 

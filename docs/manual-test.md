@@ -46,7 +46,12 @@ What the unit and integration tests cannot reach: a live microphone, a real Foun
 - [ ] Unmute and speak: the Live page's clock times carry on from the real time (they do not restart at 00:00).
 - [ ] Play a video with speech → its lines are labelled *Them*; your own lines are labelled *You*.
 - [ ] Drag the window by the headline, snap it with Win+Arrow, and resize it down to its minimum (420 × 320) → nothing is cut off; long pages scroll, and Settings keeps Apply and Cancel in view. The caption buttons do not cover ⚙ at 100 %, 150 % and 200 % scale.
-- [ ] *Sounds and animations* off → no cues, and highlights appear without fading in.
+- [ ] *Sounds and animations* off → no cues, and highlights appear without fading in; new lines do not slide in, the level bars do not breathe, and an incorrect claim does not wash the header red. *Cue volume* at 0 → silent; at 100 → as before.
+- [ ] *Listen only during calls* on, no call → the header says *Waiting for a call* and nothing is transcribed. Join a Teams or Zoom call (or a browser call) → *Listening to the call on Teams* within 3 s; leave it → waiting again. The mute button does not change on its own.
+- [ ] Compact (the button left of ⚙) → only the header remains, still on top; again → the pages come back at the old height.
+- [ ] Two repositories on two lines → **Apply** reads both (✓ per line); a question naming a class only the second has → the Code row is tagged with the second's name.
+- [ ] Hover the trend line in the header → the counts and *N model calls · … s average · … tokens*.
+- [ ] Talk for a dozen lines, then mute → after a few seconds the header says *Meeting summary saved*; History shows it under *Summary of the meeting*. **Export** opens `Documents\PoVoiceHud\Meeting {date}.md`.
 - [ ] Tray: left click hides and shows the HUD. *Open the history folder* opens `sessions`. *Copy diagnostics* puts a zip on the clipboard (logs, `settings.json`, `environment.txt`, no `sessions`). *Mute*/*Unmute* follows the header. *Quit* closes the app and removes the icon. *Quit PoVoiceHud* in Settings does the same.
 - [ ] *Start with Windows* adds or removes `PoVoiceHud` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 - [ ] *Not yet run on this machine:* `pwsh build/pack.ps1`, install `artifacts\releases\PoVoiceHud.App-win-Setup.exe`, raise `<Version>`, pack again with `-Feed <folder>`, set `UpdateFeed` to that folder and start the installed copy. The header should say the new version downloaded, and closing it should install that version.

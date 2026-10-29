@@ -26,13 +26,13 @@
                 <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
                            Text="Claims are checked by gpt-4.1-mini, so the resource needs a deployment of that name. Apply checks the connection first. The key is kept in Windows Credential Manager." />
 
-                <!-- 2. Optional: a code repository, so claims about the code are checked against its files -->
-                <TextBox Header="Code repository (optional)" Text="{x:Bind ViewModel.Repository, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"
-                         PlaceholderText="A GitHub or Azure DevOps URL, or a folder on this PC" />
+                <!-- 2. Optional: code repositories, so claims about the code are checked against their files; one per line -->
+                <TextBox Header="Code repositories (optional, one per line)" Text="{x:Bind ViewModel.Repository, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"
+                         PlaceholderText="A GitHub or Azure DevOps URL, or a folder on this PC" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="96" />
                 <PasswordBox Header="Repository access token" Password="{x:Bind ViewModel.RepositoryToken, Mode=TwoWay}"
                              PlaceholderText="{x:Bind local:SettingsView.TokenPlaceholder(ViewModel.HasRepositoryToken), Mode=OneWay}" />
                 <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
-                           Text="A claim that names a file or class in it is checked against that code. Up to three matching files (the first 6,000 characters of each) go to the model with the claim. A URL is cloned to this PC and refreshed at each start; a private one needs a GitHub or Azure DevOps personal access token with read access to code." />
+                           Text="A claim that names a file or class in one is checked against that code. Up to three matching files (the first 6,000 characters of each) go to the model with the claim. A URL is cloned to this PC and refreshed at each start; a private one needs a GitHub or Azure DevOps personal access token with read access to code (one token for all)." />
 
                 <!-- 3. Three switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
                 <Grid ColumnSpacing="12" RowSpacing="2" Margin="0,4,0,0">
@@ -43,13 +43,18 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <ToggleSwitch Header="Wikipedia look-ups" IsOn="{x:Bind ViewModel.LookUpClaims, Mode=TwoWay}" MinWidth="0"
+                    <ToggleSwitch Header="Look claims up" IsOn="{x:Bind ViewModel.LookUpClaims, Mode=TwoWay}" MinWidth="0"
                                   AutomationProperties.HelpText="{x:Bind ViewModel.LookUpNote, Mode=OneWay}"
                                   ToolTipService.ToolTip="{x:Bind ViewModel.LookUpNote, Mode=OneWay}" />
                     <ToggleSwitch Grid.Row="1" Header="Start with Windows" IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" MinWidth="0" />
+                    <ToggleSwitch Grid.Row="2" Header="Listen only during calls" IsOn="{x:Bind ViewModel.CallsOnly, Mode=TwoWay}" MinWidth="0"
+                                  ToolTipService.ToolTip="Hear nothing until Teams, Zoom, Slack, Webex, Discord or a browser call has the microphone open, and stop when the call ends" />
                     <ToggleSwitch Grid.Column="1" Header="Sounds and animations" IsOn="{x:Bind ViewModel.Sounds, Mode=TwoWay}" MinWidth="0"
-                                  ToolTipService.ToolTip="A short cue for each verdict and for mute (each under a quarter of a second, so call audio never transcribes it), and the highlight fading in" />
+                                  ToolTipService.ToolTip="A short cue for each verdict, answer and mute (each under a quarter of a second, so call audio never transcribes it), and the highlights moving" />
+                    <Slider Grid.Column="1" Grid.Row="1" Grid.RowSpan="2" Header="Cue volume" Minimum="0" Maximum="100" StepFrequency="5"
+                            Value="{x:Bind ViewModel.CueVolume, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.Sounds, Mode=OneWay}" VerticalAlignment="Top" />
                 </Grid>
             </StackPanel>
         </ScrollViewer>
@@ -71,6 +76,9 @@
                 <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Style="{StaticResource HudCaption}" TextWrapping="Wrap" VerticalAlignment="Center" />
             </StackPanel>
             <Button Grid.Row="1" Content="Quit PoVoiceHud" Click="Quit_Click" />
+            <!-- When this copy was built (YYMMDD) and its version, quietly in the corner -->
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.BuildStamp}" Style="{StaticResource HudCaption}" FontSize="11"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2" />
             <Button Grid.Row="1" Grid.Column="2" Content="Cancel" Command="{x:Bind ViewModel.CancelCommand}"
                     ToolTipService.ToolTip="Leave the settings as they were (Esc)">
                 <Button.KeyboardAccelerators>

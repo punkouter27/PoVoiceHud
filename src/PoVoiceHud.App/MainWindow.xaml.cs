@@ -1,7 +1,10 @@
+using System.Numerics;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using PoVoiceHud.Core;
 using PoVoiceHud.Core.Audio;
 using PoVoiceHud.Core.ViewModels;
@@ -15,6 +18,9 @@ public sealed partial class MainWindow : WindowEx
     private static readonly Brush None = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
     private bool _follow = true;  // the Live page is scrolled to the end, so new lines keep it there
+    private LiveLineViewModel? _slid;   // the newest line that has slid in: a line scrolled back into view does not slide again
+    private Storyboard? _pulse;
+    private double _fullHeight;   // the window's height before compact mode, in DIPs
 
     public MainWindow(HudViewModel viewModel)
     {
@@ -31,6 +37,9 @@ public sealed partial class MainWindow : WindowEx
         {
             if (e.PropertyName == nameof(HudViewModel.MicLevel)) ShowLevel(ViewModel.MicLevel);
             if (e.PropertyName == nameof(HudViewModel.Page)) PageSwitch.SelectedItem = Tab(ViewModel.Page);
+            if (e.PropertyName == nameof(HudViewModel.Trend)) DrawTrend();
+            if (e.PropertyName == nameof(HudViewModel.IsChecking)) Pulse(ViewModel.IsChecking);
+            if (e.PropertyName == nameof(HudViewModel.IsCompact)) Compact(ViewModel.IsCompact);
         };
         // New lines and verdicts make the list taller; while it is scrolled to the end it stays there. Scrolling up stops that.
         LiveScroll.ViewChanged += (_, e) =>
@@ -59,14 +68,90 @@ public sealed partial class MainWindow : WindowEx
     }
 
     private void PageSwitch_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) =>
-        ViewModel.Page = ReferenceEquals(sender.SelectedItem, FactsTab) ? HudPage.Facts : ReferenceEquals(sender.SelectedItem, CodeTab) ? HudPage.Code : HudPage.Live;
+        ViewModel.Page = sender.SelectedItem == FactsTab ? HudPage.Facts : sender.SelectedItem == CodeTab ? HudPage.Code
+            : sender.SelectedItem == HistoryTab ? HudPage.History : HudPage.Live;
 
-    private SelectorBarItem Tab(HudPage page) => page switch { HudPage.Facts => FactsTab, HudPage.Code => CodeTab, _ => LiveTab };
+    private SelectorBarItem Tab(HudPage page) => page switch { HudPage.Facts => FactsTab, HudPage.Code => CodeTab, HudPage.History => HistoryTab, _ => LiveTab };
 
-    /// <summary>The highlight colour of a line fades in when its verdict lands.</summary>
-    private void Highlight_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+    /// <summary>The highlight colour of a line fades in when its verdict lands, and the newest line slides up into place.</summary>
+    private void Live_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
     {
-        if (args.Element is Border border) border.BackgroundTransition = Animations ? new BrushTransition { Duration = TimeSpan.FromMilliseconds(350) } : null;
+        if (args.Element is not Border border) return;
+        border.BackgroundTransition = Animations ? new BrushTransition { Duration = TimeSpan.FromMilliseconds(350) } : null;
+        if (!Animations || args.Index != ViewModel.Live.Count - 1 || ViewModel.Live[args.Index] == _slid) return;
+        _slid = ViewModel.Live[args.Index];
+        // On the compositor, so it costs the UI thread nothing: from 10 px lower and transparent, over a fifth of a second.
+        ElementCompositionPreview.SetIsTranslationEnabled(border, true);
+        var visual = ElementCompositionPreview.GetElementVisual(border);
+        var compositor = visual.Compositor;
+        var ease = compositor.CreateCubicBezierEasingFunction(new Vector2(0.1f, 0.9f), new Vector2(0.2f, 1f));
+        var rise = compositor.CreateVector3KeyFrameAnimation();
+        rise.InsertKeyFrame(0, new Vector3(0, 10, 0));
+        rise.InsertKeyFrame(1, Vector3.Zero, ease);
+        rise.Duration = TimeSpan.FromMilliseconds(220);
+        var fade = compositor.CreateScalarKeyFrameAnimation();
+        fade.InsertKeyFrame(0, 0);
+        fade.InsertKeyFrame(1, 1, ease);
+        fade.Duration = TimeSpan.FromMilliseconds(220);
+        visual.StartAnimation("Translation", rise);
+        visual.StartAnimation(nameof(visual.Opacity), fade);
+    }
+
+    /// <summary>The level bars breathe while a claim is with the model, so a glance says it is still working.</summary>
+    private void Pulse(bool on)
+    {
+        _pulse?.Stop();
+        _pulse = null;
+        LevelBars.Opacity = 1;
+        if (!on || !Animations) return;
+        var breathe = new DoubleAnimation { From = 1, To = 0.45, Duration = TimeSpan.FromMilliseconds(700), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
+        Storyboard.SetTarget(breathe, LevelBars);
+        Storyboard.SetTargetProperty(breathe, nameof(UIElement.Opacity));
+        _pulse = new Storyboard { Children = { breathe } };
+        _pulse.Begin();
+    }
+
+    /// <summary>A brief red wash across the header: a claim was just found incorrect.</summary>
+    public void FlashIncorrect()
+    {
+        if (!Animations) return;
+        var wash = new DoubleAnimationUsingKeyFrames();
+        wash.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = TimeSpan.FromMilliseconds(120), Value = 1 });
+        wash.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = TimeSpan.FromMilliseconds(700), Value = 0, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        Storyboard.SetTarget(wash, Flash);
+        Storyboard.SetTargetProperty(wash, nameof(UIElement.Opacity));
+        new Storyboard { Children = { wash } }.Begin();
+    }
+
+    /// <summary>The share found correct after each recent verdict, as a line: top is all correct, bottom none.</summary>
+    private void DrawTrend()
+    {
+        var trend = ViewModel.Trend;
+        var points = new PointCollection();
+        const double width = 44, height = 18, inset = 2;
+        for (var i = 0; i < trend.Count; i++)
+            points.Add(new Windows.Foundation.Point(trend.Count == 1 ? width / 2 : i * width / (trend.Count - 1), inset + (1 - trend[i]) * (height - 2 * inset)));
+        Spark.Points = points;
+        Spark.Stroke = Theme(trend.Count > 0 && trend[^1] < 0.5 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush");
+    }
+
+    /// <summary>
+    /// Compact: the window shrinks to its header, a strip to keep beside a call; the full height comes back after. The
+    /// minimum height gives way while compact.
+    /// </summary>
+    private void Compact(bool compact)
+    {
+        if (compact)
+        {
+            _fullHeight = Height;
+            MinHeight = 48;
+            Height = 48;
+        }
+        else
+        {
+            MinHeight = 320;
+            Height = Math.Max(320, _fullHeight);
+        }
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)
@@ -100,6 +185,24 @@ public sealed partial class MainWindow : WindowEx
     public static string MicName(bool muted) => muted ? "Microphone is muted — unmute" : "Microphone is live — mute";
 
     public static string MicTip(string status, bool muted) => $"{status}\n{(muted ? "Click to unmute" : "Click to mute")}";
+
+    public static string CompactName(bool compact) => compact ? "Show the pages" : "Compact: just the header";
+
+    public static string CompactGlyph(bool compact) => compact ? "" : "";   // full screen / back to window
+
+    public static Visibility Shown(string? text) => string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>A model confidence (0–1) on a progress bar's 0–100.</summary>
+    public static double Percent(double confidence) => Math.Clamp(confidence, 0, 1) * 100;
+
+    /// <summary>The summary's Markdown as plain text to read: headings as lines of their own, bullets as dots.</summary>
+    public static string Plain(string? markdown) => string.Join('\n', (markdown ?? "").Split('\n')
+        .Where(line => !line.StartsWith("## ", StringComparison.Ordinal))
+        .Select(line => line.StartsWith("### ", StringComparison.Ordinal) ? $"\n{line[4..].ToUpperInvariant()}"
+            : line.StartsWith("- ", StringComparison.Ordinal) ? $"• {line[2..]}" : line)).Trim();
+
+    /// <summary>A past day's line: a verdict or answer in its colour, what was said plain.</summary>
+    public static Brush HistoryBack(LineState kind) => kind == LineState.Heard ? None : kind == LineState.CantTell ? Theme("SubtleFillColorSecondaryBrush") : LineBack(kind);
 
     /// <summary>One verdict's share of the bar along the header's bottom edge; with no verdicts yet the bar is empty.</summary>
     public static GridLength Share(int count) => new(count, GridUnitType.Star);
