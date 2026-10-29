@@ -28,6 +28,7 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
     private const int MaxExcerpts = 3;
     private const int MaxPaths = 800;   // the file list the model sees; beyond it, a big repository is listed in part
     private const int MaxSources = 5;
+    private const int MinQuote = 12;   // characters of evidence quoted from an excerpt, at least
 
     private const string SystemPrompt =
         "You help someone in a meeting by looking things up in their code repository, named in \"repository\". The user message is JSON " +
@@ -37,14 +38,19 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
         "never your own knowledge of other projects. A request (\"tell me about…\", \"show me…\", \"explain…\") is a question. If \"said\" asks something about the repository, answer it in one or two short " +
         "sentences, naming files or classes; for \"how many\", count the matching paths in \"files\" and give the number; if they do not " +
         "show the answer, say so. If it states something about the repository, judge " +
-        "it: \"supported\" or \"contradicted\" when the files settle it, otherwise \"unverified\", with one short sentence why. If it is not " +
-        "about this repository at all, or the files and excerpts say nothing about it (ordinary conversation that only seemed to mention " +
+        "it: \"supported\" only when the files show exactly what it says; \"contradicted\" when they show something else instead (another " +
+        "model, library, place or number: something similar or related is not support); otherwise \"unverified\", with one short " +
+        "sentence why. If it is not about this repository at all, or the files and excerpts say nothing about it (ordinary conversation that only seemed to mention " +
         "the code), its kind is \"not_about_code\": never answer that the repository does not contain something unrelated. Reply with ONLY a JSON object: {\"kind\": \"question\" | " +
-        "\"statement\" | \"not_about_code\", \"verdict\": \"supported\" | \"contradicted\" | \"unverified\" | \"\" (\"\" for a question), " +
-        "\"topic\": the question or statement in the speaker's words, made to stand on its own, \"text\": the answer or the reason, " +
-        "\"files\": up to five paths from \"files\" that the answer rests on}.";
+        "\"statement\" | \"not_about_code\", \"topic\": the question or statement in the speaker's words, made to stand on its own, " +
+        "\"evidence\": for a statement, one line copied exactly from an excerpt, or one path from \"files\", that settles it (\"\" if none " +
+        "does), \"text\": the answer or the reason, \"verdict\": \"supported\" | \"contradicted\" | \"unverified\" | \"\" (\"\" for a " +
+        "question), \"files\": up to five paths from \"files\" that the answer rests on}.";
 
-    /// <summary>The reply shape <see cref="AskAsync"/> reads; the server enforces it.</summary>
+    /// <summary>
+    /// The reply shape <see cref="AskAsync"/> reads; the server enforces it. The model writes the properties in this order, so
+    /// the evidence and the reason come before the verdict: it decides after it has looked, not before.
+    /// </summary>
     public static readonly object ReplyFormat = new
     {
         type = "json_schema",
@@ -58,12 +64,13 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
                 properties = new
                 {
                     kind = new { type = "string", @enum = new[] { "question", "statement", "not_about_code" } },
-                    verdict = new { type = "string", @enum = new[] { "supported", "contradicted", "unverified", "" } },
                     topic = new { type = "string" },
+                    evidence = new { type = "string" },
                     text = new { type = "string" },
+                    verdict = new { type = "string", @enum = new[] { "supported", "contradicted", "unverified", "" } },
                     files = new { type = "array", items = new { type = "string" } },
                 },
-                required = new[] { "kind", "verdict", "topic", "text", "files" },
+                required = new[] { "kind", "topic", "evidence", "text", "verdict", "files" },
                 additionalProperties = false,
             },
         },
@@ -81,8 +88,8 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
         Words().Count(sentence) >= 3
         && (Names(sentence) || (FollowsOn(sentence) && context is { Count: > 0 } && context.Any(Names)));
 
-    /// <summary>A request ("Tell me about…", "Show me…") or a question: it gets an answer, never a verdict.</summary>
-    public static bool IsAsked(string sentence) => sentence.TrimEnd().EndsWith('?') || Request().IsMatch(sentence);
+    /// <summary>A request ("Tell me about…", "Show me…") or a question, "?" or not: it gets an answer, never a verdict.</summary>
+    public static bool IsAsked(string sentence) => sentence.TrimEnd().EndsWith('?') || Request().IsMatch(sentence) || Question().IsMatch(sentence);
 
     private bool Names(string sentence) =>
         CodeWords().IsMatch(sentence) || SymbolMatcher.Says(sentence, repository.Name)
@@ -100,13 +107,14 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
         var named = repository.Named(lookup, MaxExcerpts);
         var found = named.Concat(repository.Search(lookup, MaxExcerpts - named.Count, named.Select(e => e.Path))).ToList();
         var paths = repository.Paths.ToList();
+        var listed = paths.Take(MaxPaths).ToList();
 
         var user = PromptJson.Serialize(new
         {
             repository = repository.Name,
             context,
             said,
-            files = paths.Take(MaxPaths),
+            files = listed,
             files_listed_in_part = paths.Count > MaxPaths,
             excerpts = found.Select(e => new { path = e.Path, from_line = Math.Max(1, e.Line - 20), text = e.Text }),
         });
@@ -123,11 +131,11 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
         {
             throw Connection.Describe(e);
         }
-        return Read(raw, said, found, paths);
+        return Read(raw, said, found, listed);
     }
 
-    /// <summary>The model's reply as a fact. A file it names that is not in the repository is dropped: it may be invented.</summary>
-    private CodeFact? Read(string raw, string said, IReadOnlyList<CodeExcerpt> found, IReadOnlyList<string> paths)
+    /// <summary>The model's reply as a fact. A file it names that it was not sent is dropped: it may be invented.</summary>
+    private CodeFact? Read(string raw, string said, IReadOnlyList<CodeExcerpt> found, IReadOnlyList<string> listed)
     {
         try
         {
@@ -138,20 +146,23 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
             var root = doc.RootElement;
             var kind = root.TryGetProperty("kind", out var k) ? k.GetString() : null;
             if (kind is not ("question" or "statement")) return null;
+            // What the model was sent: the listed paths, and the files of the excerpts (which may lie past the list's end).
+            var known = new HashSet<string>(listed.Concat(found.Select(e => e.Path)), StringComparer.OrdinalIgnoreCase);
+            // Correct or Incorrect only rests on a line it was shown (or a path in the list): without one it is a guess.
+            var evidence = root.TryGetProperty("evidence", out var ev) ? ev.GetString() : null;
             // "Is there a dark mode in the codebase?" and "Tell me about our repo." are asked, whatever the model makes of them:
             // they get an answer, not a verdict.
             Verdict? verdict = kind == "question" || IsAsked(said) ? null : (root.TryGetProperty("verdict", out var v) ? v.GetString() : null) switch
             {
-                "supported" => Verdict.Supported,
-                "contradicted" => Verdict.Contradicted,
+                "supported" when Shown(evidence, found, known) => Verdict.Supported,
+                "contradicted" when Shown(evidence, found, known) => Verdict.Contradicted,
                 _ => Verdict.Unverified,
             };
             var topic = root.TryGetProperty("topic", out var t) && !string.IsNullOrWhiteSpace(t.GetString()) ? t.GetString()!.Trim() : said;
             var text = root.TryGetProperty("text", out var x) ? (x.GetString() ?? "").Trim() : "";
-            var known = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
             var sources = (root.TryGetProperty("files", out var f) && f.ValueKind == JsonValueKind.Array ? f.EnumerateArray().Select(p => p.GetString()) : [])
                 .OfType<string>()
-                .Select(p => p.Trim().TrimStart('/').Replace('\\', '/'))
+                .Select(RepoPath)
                 .Where(known.Contains)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(MaxSources)
@@ -165,6 +176,25 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
         }
     }
 
+    /// <summary>
+    /// The evidence is one of the paths sent, or a quote from an excerpt (spacing and case aside) long enough to say
+    /// something: "public" or "{ }" is in every file.
+    /// </summary>
+    private static bool Shown(string? evidence, IReadOnlyList<CodeExcerpt> found, HashSet<string> known)
+    {
+        var quote = Squeeze(evidence ?? "");
+        return known.Contains(RepoPath(quote))
+            || (quote.Length >= MinQuote && found.Any(e => Squeeze(e.Text).Contains(quote, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>A path as the model wrote it, as the file list has it: "/src\App.cs" is "src/App.cs".</summary>
+    private static string RepoPath(string path) => path.Trim().TrimStart('/').Replace('\\', '/');
+
+    private static string Squeeze(string text) => Spaces().Replace(text, " ").Trim();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Spaces();
+
     [GeneratedRegex(@"[\p{L}\p{N}']+")]
     private static partial Regex Words();
 
@@ -172,11 +202,17 @@ public sealed partial class CodeAnswerer(ILanguageModel? model, CodeRepository r
     [GeneratedRegex(@"^\W*(?:(?:so|and|okay|ok|now|please|can\s+you|could\s+you|would\s+you)[\s,]+)*(?:tell|show|explain|describe|list|summari[sz]e|walk|give|find|count)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Request();
 
+    // A question Whisper ended with a full stop: a question word, at most one word, then a verb that asks ("Which model does
+    // our app use.", "How many pages are there."). "Which is why…", "Which means…" and "Who wrote Hamlet." state something.
+    [GeneratedRegex(@"^\W*(?:(?:so|and|okay|ok|now)[\s,]+)*(?:what|which|where|who|why|how)(?!\s+(?:is\s+why|means)\b)(?:\s+[\p{L}']+)?\s+(?:is|are|was|were|do|does|did|can|could|should|will|would|has|have|many|much)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Question();
+
     // Words that point back at what was just said.
     [GeneratedRegex(@"\b(?:it|its|it's|they|them|their|that|those|these|this|there)\b", RegexOptions.IgnoreCase)]
     private static partial Regex PointsBack();
 
     // "our code", "the codebase", "this repo", "our website", "the backend", "the API", "the database schema", "a pull request" …
-    [GeneratedRegex(@"\b(?:(?:our|the|this|that|my|your)\s+(?:source\s+)?(?:code|codebase|code\s+base|repo|repository|app|application|website|web\s+site|site|backend|back\s+end|frontend|front\s+end|api|apis|database|schema|endpoints?)|codebase|pull\s+request|github)\b", RegexOptions.IgnoreCase)]
+    // Whisper often hears "our" as "are": "which model does are app use" counts, "there are app settings" does not.
+    [GeneratedRegex(@"\b(?:(?:our|the|this|that|my|your|(?<=\b(?:do|does|did|is|was|in|on|of|about|for|with|from|to)\s+)are)\s+(?:source\s+)?(?:code|codebase|code\s+base|repo|repository|app|application|website|web\s+site|site|backend|back\s+end|frontend|front\s+end|api|apis|database|schema|endpoints?)|codebase|pull\s+request|github)\b", RegexOptions.IgnoreCase)]
     private static partial Regex CodeWords();
 }

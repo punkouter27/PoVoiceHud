@@ -81,6 +81,8 @@ public class CodeRepositoryTests
         Assert.True(answerer.IsAbout("The invoice service retries three times."));                // names a file
         Assert.False(answerer.IsAbout("The Eiffel Tower was completed in 1889."));
         Assert.False(answerer.IsAbout("our code?"));                                               // too short to say anything
+        Assert.True(answerer.IsAbout(", which model does are app use for fact checking."));        // "our" as Whisper heard it
+        Assert.False(answerer.IsAbout("There are app stores on every phone."));
 
         // Ordinary talk heard in a news podcast: short words are not file names ("we"/web.config, "there … it"/theme-kit.css).
         Assert.False(answerer.IsAbout("We're not safe because John Solomon"));
@@ -98,6 +100,11 @@ public class CodeRepositoryTests
         Assert.True(CodeAnswerer.IsAsked("Tell me about the Punkouter Software code repo."));
         Assert.True(CodeAnswerer.IsAsked("Okay, can you show me where payments are handled."));
         Assert.False(CodeAnswerer.IsAsked("The invoice service retries three times."));
+        Assert.True(CodeAnswerer.IsAsked(", which model does are app use for fact checking."));   // Whisper's full stop on a question
+        Assert.True(CodeAnswerer.IsAsked("How many pages are on our website."));
+        Assert.False(CodeAnswerer.IsAsked("When the app starts, it clones the repo."));
+        Assert.False(CodeAnswerer.IsAsked("Which is why our app retries three times."));
+        Assert.False(answerer.IsAbout("Who wrote Hamlet.", repoTalk));                             // a new subject, not a question about the code
     }
 
     [Fact]
@@ -106,8 +113,8 @@ public class CodeRepositoryTests
         using var repo = TempRepo.WithSampleProject();
         using var code = Open(repo);
         var model = new FakeModel(user => user.Contains("How many", StringComparison.Ordinal)
-            ? """{"kind":"question","verdict":"","topic":"How many entities are there","text":"Two: Inspection and Tenant.","files":["src/Domain/Entities/Inspection.cs","/src/Domain/Entities/Tenant.cs","src/Made/Up.cs"]}"""
-            : """{"kind":"statement","verdict":"contradicted","topic":"The invoice service retries three times","text":"It has no retry logic.","files":["src/Services/InvoiceService.cs"]}""");
+            ? """{"kind":"question","topic":"How many entities are there","evidence":"","text":"Two: Inspection and Tenant.","verdict":"","files":["src/Domain/Entities/Inspection.cs","/src/Domain/Entities/Tenant.cs","src/Made/Up.cs"]}"""
+            : """{"kind":"statement","topic":"The invoice service retries three times","evidence":"public  class InvoiceService { }","text":"It has no retry logic.","verdict":"contradicted","files":["src/Services/InvoiceService.cs"]}""");
         var answerer = new CodeAnswerer(model, code);
 
         var answer = await answerer.AskAsync("How many entities are there in our code?", ["We were looking at the schema."], _ct);
@@ -133,6 +140,14 @@ public class CodeRepositoryTests
         Assert.EndsWith("InvoiceService.cs:3", source.Editor.OriginalString);   // at the class, since the excerpt sent was about it
         using (var sent = JsonDocument.Parse(model.Messages[1]))
             Assert.Equal("src/Services/InvoiceService.cs", sent.RootElement.GetProperty("excerpts")[0].GetProperty("path").GetString());
+
+        // A verdict whose evidence is not in anything the model was shown is a guess: Can't tell.
+        foreach (var quote in new[] { "File.WriteAllText(\\\"key.txt\\\", key)", "public" })   // invented, or too short to say anything
+        {
+            var guess = await new CodeAnswerer(new FakeModel(_ => $$"""{"kind":"statement","topic":"The repo stores the API key in a text file","evidence":"{{quote}}","text":"Keys are written by the settings.","verdict":"supported","files":[]}"""), code)
+                .AskAsync("The repo stores the API key in a text file.", [], _ct);
+            Assert.Equal(Verdict.Unverified, guess?.Verdict);
+        }
 
         Assert.Null(await new CodeAnswerer(new FakeModel(_ => """{"kind":"not_about_code","verdict":"","topic":"","text":"","files":[]}"""), code)
             .AskAsync("Our website has a nice colour.", [], _ct));
