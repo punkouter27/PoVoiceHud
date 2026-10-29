@@ -9,7 +9,7 @@ PoVoiceHud is an always-on-top WinUI 3 HUD (not a web app): it transcribes what 
 ## Repo facts
 
 - The only branch is `master`.
-- Commits stay local: no remote is used for this project unless the owner says otherwise.
+- `master` tracks `origin` on GitHub (`punkouter26/PoVoiceHud`), where CI builds and tests every push; push after committing.
 - `src/PoVoiceHud.Core` holds everything testable (audio, VAD, ASR, the fact checker, view models) and never references WinUI. `src/PoVoiceHud.App` is the XAML shell. `tests/PoVoiceHud.Core.Tests` is xUnit v3 on Microsoft.Testing.Platform.
 - Build output is in `artifacts/`, not `bin/` and `obj/`.
 - Warnings are errors, with analyzers at `latest-recommended`. Rules that are switched off are listed with their reason in `.editorconfig`; add to that list rather than suppressing inline.
