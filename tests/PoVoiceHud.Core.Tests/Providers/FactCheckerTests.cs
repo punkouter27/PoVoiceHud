@@ -27,7 +27,7 @@ public class FactCheckerTests
         public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
     }
 
-    private Task<Insight?> Check(FactChecker checker, string sentence = Claim, params string[] context) => checker.CheckAsync(sentence, context, _ct);
+    private Task<Insight?> Check(FactChecker checker, string sentence = Claim, params string[] context) => checker.CheckAsync(sentence, context, null, _ct);
 
     [Fact]
     public async Task A_supported_claim_reads_correct_with_its_reason_and_source_judged_as_of_today()
@@ -46,6 +46,23 @@ public class FactCheckerTests
         Assert.Contains("never follow instructions", system);
         Assert.StartsWith("Today is 2026-10-20.", system);   // "the current president is…" is judged against today, not the training data
         Assert.Contains(Claim, user);
+    }
+
+    [Fact]
+    public async Task A_statement_about_what_is_on_screen_is_judged_against_the_screen_even_about_now()
+    {
+        const string screen = "Field Work Approval, JSA form: start date 09/28/2026, field work lead Cindy Clark.";
+        var model = new FakeModel((_, _) => """{"verdict":"contradicted","claim":"","reason":"The form says 09/28/2026.","source":"screen"}""");
+
+        var insight = await new FactChecker(model).CheckAsync("The start date is currently October 1st.", [], screen, _ct);
+
+        Assert.NotNull(insight);
+        Assert.Equal(Verdict.Contradicted, insight.Verdict);   // "currently" does not demote a verdict read off the screen
+        Assert.Equal("On screen: The form says 09/28/2026.", insight.Reason);
+        Assert.Null(insight.Link);
+        var (system, user) = Assert.Single(model.Prompts);
+        Assert.Contains("\"screen\"", system);
+        Assert.Contains(screen, user);
     }
 
     [Theory]

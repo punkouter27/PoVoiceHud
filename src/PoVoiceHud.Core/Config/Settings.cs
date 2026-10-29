@@ -21,6 +21,11 @@ public sealed record Settings
     /// </summary>
     public string? Repository { get; set; }
     public bool StartWithWindows { get; set; }
+    /// <summary>
+    /// Captures the monitor in use every few seconds and, when it has changed, has the model describe it, so what is said can be
+    /// checked against what is shown. The pictures go to the Foundry resource and are never saved; the descriptions are logged.
+    /// </summary>
+    public bool WatchScreen { get; set; }
     /// <summary>Short cues for verdicts and mute (each under the 300 ms the segmenter ignores) and the highlight's fade.</summary>
     public bool Sounds { get; set; } = true;
     /// <summary>How loud the cues are, 0–100.</summary>

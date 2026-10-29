@@ -117,7 +117,7 @@ public class CodeRepositoryTests
             : """{"kind":"statement","topic":"The invoice service retries three times","evidence":"public  class InvoiceService { }","text":"It has no retry logic.","verdict":"contradicted","files":["src/Services/InvoiceService.cs"]}""");
         var answerer = new CodeAnswerer(model, code);
 
-        var answer = await answerer.AskAsync("How many entities are there in our code?", ["We were looking at the schema."], _ct);
+        var answer = await answerer.AskAsync("How many entities are there in our code?", ["We were looking at the schema."], null, _ct);
         Assert.NotNull(answer);
         Assert.True(answer.IsAnswer);
         Assert.Equal("Two: Inspection and Tenant.", answer.Text);
@@ -130,10 +130,10 @@ public class CodeRepositoryTests
         }
 
         var request = await new CodeAnswerer(new FakeModel(_ => """{"kind":"statement","verdict":"supported","topic":"Tell me about the repo","text":"A Blazor app.","files":[]}"""), code)
-            .AskAsync("Tell me about the repo.", [], _ct);
+            .AskAsync("Tell me about the repo.", [], null, _ct);
         Assert.True(request?.IsAnswer);   // a request is answered, even when the model calls it a statement
 
-        var verdict = await answerer.AskAsync("The invoice service retries three times.", [], _ct);
+        var verdict = await answerer.AskAsync("The invoice service retries three times.", [], null, _ct);
         Assert.Equal((Verdict.Contradicted, "The invoice service retries three times"), (verdict?.Verdict, verdict?.Topic));
         var source = Assert.Single(verdict!.Sources);
         Assert.Equal("https://github.com/acme/pmis/blob/HEAD/src/Services/InvoiceService.cs", source.Link.AbsoluteUri);
@@ -145,13 +145,13 @@ public class CodeRepositoryTests
         foreach (var quote in new[] { "File.WriteAllText(\\\"key.txt\\\", key)", "public" })   // invented, or too short to say anything
         {
             var guess = await new CodeAnswerer(new FakeModel(_ => $$"""{"kind":"statement","topic":"The repo stores the API key in a text file","evidence":"{{quote}}","text":"Keys are written by the settings.","verdict":"supported","files":[]}"""), code)
-                .AskAsync("The repo stores the API key in a text file.", [], _ct);
+                .AskAsync("The repo stores the API key in a text file.", [], null, _ct);
             Assert.Equal(Verdict.Unverified, guess?.Verdict);
         }
 
         Assert.Null(await new CodeAnswerer(new FakeModel(_ => """{"kind":"not_about_code","verdict":"","topic":"","text":"","files":[]}"""), code)
-            .AskAsync("Our website has a nice colour.", [], _ct));
-        await Assert.ThrowsAsync<FactCheckUnavailableException>(() => new CodeAnswerer(model: null, code).AskAsync("How many pages are on our website?", [], _ct));
+            .AskAsync("Our website has a nice colour.", [], null, _ct));
+        await Assert.ThrowsAsync<FactCheckUnavailableException>(() => new CodeAnswerer(model: null, code).AskAsync("How many pages are on our website?", [], null, _ct));
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public class CodeRepositoryTests
         Assert.Same(siteCode, answerer.Pick("Tell me about the code."));                     // nothing to go on: the first
         Assert.True(answerer.IsAbout("Is the checkout pipeline async?"));
 
-        var fact = await answerer.AskAsync("Is the checkout pipeline async?", [], _ct);
+        var fact = await answerer.AskAsync("Is the checkout pipeline async?", [], null, _ct);
         Assert.Equal(("AcmeShop", 0.8), (fact?.Repository, fact?.Confidence));   // named, since there are two
         using var sent = JsonDocument.Parse(model.Messages[0]);
         Assert.Equal("AcmeShop", sent.RootElement.GetProperty("repository").GetString());

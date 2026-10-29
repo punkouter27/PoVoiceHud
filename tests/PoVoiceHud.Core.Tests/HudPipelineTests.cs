@@ -45,7 +45,7 @@ public class HudPipelineTests
         public int Calls => Volatile.Read(ref _calls);
         public System.Collections.Concurrent.ConcurrentQueue<(string Sentence, IReadOnlyList<string> Context)> Asked { get; } = new();
 
-        public Task<Insight?> CheckAsync(string sentence, IReadOnlyList<string> context, CancellationToken ct)
+        public Task<Insight?> CheckAsync(string sentence, IReadOnlyList<string> context, string? screen, CancellationToken ct)
         {
             Interlocked.Increment(ref _calls);
             Asked.Enqueue((sentence, context));
@@ -189,7 +189,7 @@ public class HudPipelineTests
         await using var container = services.BuildServiceProvider();
 
         Assert.NotNull(container.GetRequiredService<HudPipeline>());
-        var problem = await Assert.ThrowsAsync<FactCheckUnavailableException>(() => container.GetRequiredService<IFactChecker>().CheckAsync(Claim, [], _ct));
+        var problem = await Assert.ThrowsAsync<FactCheckUnavailableException>(() => container.GetRequiredService<IFactChecker>().CheckAsync(Claim, [], null, _ct));
         Assert.True(problem.NeedsSetup);
     }
 }

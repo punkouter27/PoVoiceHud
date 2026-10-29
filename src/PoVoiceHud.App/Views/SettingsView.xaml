@@ -34,13 +34,14 @@
                 <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
                            Text="A claim that names a file or class in one is checked against that code. Up to three matching files (the first 6,000 characters of each) go to the model with the claim. A URL is cloned to this PC and refreshed at each start; a private one needs a GitHub or Azure DevOps personal access token with read access to code (one token for all)." />
 
-                <!-- 3. Three switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
+                <!-- 3. The switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
                 <Grid ColumnSpacing="12" RowSpacing="2" Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -55,6 +56,8 @@
                                   ToolTipService.ToolTip="A short cue for each verdict, answer and mute (each under a quarter of a second, so call audio never transcribes it), and the highlights moving" />
                     <Slider Grid.Column="1" Grid.Row="1" Grid.RowSpan="2" Header="Cue volume" Minimum="0" Maximum="100" StepFrequency="5"
                             Value="{x:Bind ViewModel.CueVolume, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.Sounds, Mode=OneWay}" VerticalAlignment="Top" />
+                    <ToggleSwitch Grid.Row="3" Header="Watch the screen" IsOn="{x:Bind ViewModel.WatchScreen, Mode=TwoWay}" MinWidth="0"
+                                  ToolTipService.ToolTip="Every 3 seconds the monitor you are working on is captured; when it has changed, the model describes it, and what is said is checked against what is shown, on the Screen facts page. Pictures go to your Foundry resource and are never saved. The HUD is hidden from captures and screen sharing while this is on." />
                 </Grid>
             </StackPanel>
         </ScrollViewer>

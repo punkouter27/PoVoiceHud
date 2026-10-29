@@ -119,13 +119,44 @@
         <Grid Grid.Row="1" x:Name="Panel" Background="{ThemeResource HudScrimBrush}" Padding="8,4,8,8"
               Visibility="{x:Bind local:MainWindow.Not(ViewModel.IsCompact), Mode=OneWay}">
             <Grid MaxWidth="900" RowSpacing="6">
+                <Grid.Resources>
+                    <!-- One row of Facts or Screen facts: a claim found correct or incorrect, its reason and its source -->
+                    <DataTemplate x:Key="FactRow" x:DataType="vm:FactViewModel">
+                        <Border Padding="10,8" CornerRadius="6" Background="{x:Bind local:MainWindow.FactBack(IsCorrect)}">
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="{x:Bind local:MainWindow.FactGlyph(IsCorrect)}" Foreground="{x:Bind local:MainWindow.FactFore(IsCorrect)}"
+                                          FontSize="14" VerticalAlignment="Top" Margin="0,2,0,0" AutomationProperties.Name="{x:Bind Label}" />
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
+                                    <TextBlock Style="{StaticResource HudCaption}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextWrapping="Wrap">
+                                        <Run Text="{x:Bind Label}" FontWeight="SemiBold" /><Run Text=" — " /><Run Text="{x:Bind Reason}" />
+                                    </TextBlock>
+                                    <HyperlinkButton Command="{x:Bind OpenLinkCommand}" Visibility="{x:Bind HasLink}" Style="{StaticResource HudLink}" Margin="-4,0,0,0">
+                                        <TextBlock Text="{x:Bind LinkLabel}" TextTrimming="CharacterEllipsis" />
+                                    </HyperlinkButton>
+                                    <ProgressBar Value="{x:Bind local:MainWindow.Percent(Confidence)}" Width="96" HorizontalAlignment="Left" Margin="0,2,0,0"
+                                                 ToolTipService.ToolTip="{x:Bind ConfidenceText}" AutomationProperties.Name="{x:Bind ConfidenceText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="{x:Bind Time, Mode=OneWay}" Style="{StaticResource HudCaption}" HorizontalAlignment="Right" />
+                                    <TextBlock Text="{x:Bind Speaker, Mode=OneWay}" Style="{StaticResource HudCaption}" HorizontalAlignment="Right" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </Grid.Resources>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <!-- Live, Facts, Code facts or History; on Live the speakers' names, on the two lists their count and Copy -->
+                <!-- Live, Facts, Code facts, Screen facts or History; on Live the speakers' names, on the three lists their count and Copy -->
                 <Grid ColumnSpacing="8" Visibility="{x:Bind ViewModel.ShowsPages, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -141,6 +172,9 @@
                         </SelectorBarItem>
                         <SelectorBarItem x:Name="CodeTab" Text="Code" ToolTipService.ToolTip="Code facts: questions about the code repository answered, and statements about it checked">
                             <SelectorBarItem.Icon><FontIcon Glyph="&#xE943;" /></SelectorBarItem.Icon>
+                        </SelectorBarItem>
+                        <SelectorBarItem x:Name="ScreenTab" Text="Screen" ToolTipService.ToolTip="Screen facts: what is on your screen now, and what was said about it checked against it">
+                            <SelectorBarItem.Icon><FontIcon Glyph="&#xE7F4;" /></SelectorBarItem.Icon>
                         </SelectorBarItem>
                         <SelectorBarItem x:Name="HistoryTab" Text="History" ToolTipService.ToolTip="Past days: what was said and checked, a summary of each meeting, and an export">
                             <SelectorBarItem.Icon><FontIcon Glyph="&#xE81C;" /></SelectorBarItem.Icon>
@@ -168,6 +202,9 @@
                             </Flyout>
                         </DropDownButton.Flyout>
                     </DropDownButton>
+                    <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.ScreenSummary, Mode=OneWay}" Style="{StaticResource HudCaption}"
+                               VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                               Visibility="{x:Bind ViewModel.ShowsScreen, Mode=OneWay}" />
                     <Button Grid.Column="2" Click="Copy_Click" IsEnabled="{x:Bind ViewModel.CanCopy, Mode=OneWay}" Padding="10,4"
                             Visibility="{x:Bind ViewModel.ShowsList, Mode=OneWay}"
                             ToolTipService.ToolTip="Copy this page's list as filtered, one line each, to paste into notes, a chat or an email">
@@ -178,7 +215,7 @@
                     </Button>
                 </Grid>
 
-                <!-- Facts and Code facts: narrow the list by its words (or a speaker's name) and by kind -->
+                <!-- Facts, Code facts and Screen facts: narrow the list by its words (or a speaker's name) and by kind -->
                 <Grid Grid.Row="1" ColumnSpacing="8" Visibility="{x:Bind ViewModel.ShowsList, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -233,40 +270,10 @@
                 <!-- Facts: only the claims found correct or incorrect, newest first, each with its reason, source and how sure the model was -->
                 <Grid Grid.Row="2" x:Name="FactsPage" Visibility="{x:Bind ViewModel.ShowsFacts, Mode=OneWay}">
                     <ScrollViewer HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Verified facts">
-                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.ShownFacts}">
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.ShownFacts}" ItemTemplate="{StaticResource FactRow}">
                             <ItemsRepeater.Layout>
                                 <StackLayout Spacing="6" />
                             </ItemsRepeater.Layout>
-                            <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="vm:FactViewModel">
-                                    <Border Padding="10,8" CornerRadius="6" Background="{x:Bind local:MainWindow.FactBack(IsCorrect)}">
-                                        <Grid ColumnSpacing="10">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <FontIcon Glyph="{x:Bind local:MainWindow.FactGlyph(IsCorrect)}" Foreground="{x:Bind local:MainWindow.FactFore(IsCorrect)}"
-                                                      FontSize="14" VerticalAlignment="Top" Margin="0,2,0,0" AutomationProperties.Name="{x:Bind Label}" />
-                                            <StackPanel Grid.Column="1" Spacing="2">
-                                                <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
-                                                <TextBlock Style="{StaticResource HudCaption}" Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextWrapping="Wrap">
-                                                    <Run Text="{x:Bind Label}" FontWeight="SemiBold" /><Run Text=" — " /><Run Text="{x:Bind Reason}" />
-                                                </TextBlock>
-                                                <HyperlinkButton Command="{x:Bind OpenLinkCommand}" Visibility="{x:Bind HasLink}" Style="{StaticResource HudLink}" Margin="-4,0,0,0">
-                                                    <TextBlock Text="{x:Bind LinkLabel}" TextTrimming="CharacterEllipsis" />
-                                                </HyperlinkButton>
-                                                <ProgressBar Value="{x:Bind local:MainWindow.Percent(Confidence)}" Width="96" HorizontalAlignment="Left" Margin="0,2,0,0"
-                                                             ToolTipService.ToolTip="{x:Bind ConfidenceText}" AutomationProperties.Name="{x:Bind ConfidenceText}" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <TextBlock Text="{x:Bind Time, Mode=OneWay}" Style="{StaticResource HudCaption}" HorizontalAlignment="Right" />
-                                                <TextBlock Text="{x:Bind Speaker, Mode=OneWay}" Style="{StaticResource HudCaption}" HorizontalAlignment="Right" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsRepeater.ItemTemplate>
                         </ItemsRepeater>
                     </ScrollViewer>
                     <TextBlock Text="{x:Bind ViewModel.NoFactsHint, Mode=OneWay}"
@@ -406,6 +413,33 @@
                             </ItemsRepeater.ItemTemplate>
                         </ItemsRepeater>
                     </ScrollViewer>
+                </Grid>
+
+                <!-- Screen facts: what the screen shows now, in the model's words, then the claims judged against it, newest first -->
+                <Grid Grid.Row="2" x:Name="ScreenPage" RowSpacing="6" Visibility="{x:Bind ViewModel.ShowsScreen, Mode=OneWay}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Border Padding="10,8" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            Visibility="{x:Bind ViewModel.HasScreenNow, Mode=OneWay}">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="{x:Bind ViewModel.ScreenSince, Mode=OneWay}" Style="{StaticResource HudCaption}" />
+                            <TextBlock Text="{x:Bind ViewModel.ScreenNow, Mode=OneWay}" Style="{StaticResource HudCaption}" MaxLines="6"
+                                       Foreground="{ThemeResource TextFillColorPrimaryBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                       IsTextSelectionEnabled="True" ToolTipService.ToolTip="{x:Bind ViewModel.ScreenNow, Mode=OneWay}" />
+                        </StackPanel>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Screen facts">
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.ShownScreenFacts}" ItemTemplate="{StaticResource FactRow}">
+                            <ItemsRepeater.Layout>
+                                <StackLayout Spacing="6" />
+                            </ItemsRepeater.Layout>
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                    <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.NoScreenHint, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.NoScreenFacts, Mode=OneWay}" Style="{StaticResource HudCaption}" TextWrapping="Wrap"
+                               VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="380" />
                 </Grid>
 
                 <!-- Settings: in the window rather than a flyout, so switching windows to copy a key does not close or apply them -->

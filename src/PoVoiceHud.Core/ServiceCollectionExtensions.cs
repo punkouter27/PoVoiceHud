@@ -8,6 +8,7 @@ using PoVoiceHud.Core.Providers;
 using PoVoiceHud.Core.Providers.FactCheck;
 using PoVoiceHud.Core.Repos;
 using PoVoiceHud.Core.Sessions;
+using PoVoiceHud.Core.Screen;
 using PoVoiceHud.Core.Vad;
 
 namespace PoVoiceHud.Core;
@@ -53,6 +54,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IFactChecker>(), sp.GetRequiredService<ILogger<HudPipeline>>())
         {
             Code = CreateCodeAnswerer(settings, sp.GetRequiredService<HttpClient>(), sp.GetRequiredService<CodeRepositories>().All, sp.GetRequiredService<ModelStats>()),
+            Screen = CreateScreenWatcher(settings, sp.GetRequiredService<HttpClient>(), sp.GetRequiredService<ILogger<ScreenWatcher>>(), sp.GetRequiredService<ModelStats>()),
         });
         return services;
     }
@@ -67,6 +69,13 @@ public static class ServiceCollectionExtensions
     /// <summary>What answers and checks sentences about the code, or null without a repository. Rebuilt with the checker.</summary>
     public static CodeAnswerer? CreateCodeAnswerer(Settings settings, HttpClient http, IReadOnlyList<CodeRepository> code, ModelStats? stats = null) =>
         code.Count == 0 ? null : new CodeAnswerer(Model(settings, http, stats, CodeAnswerer.ReplyFormat), code);
+
+    /// <summary>What watches the screen, or null when <see cref="Settings.WatchScreen"/> is off or there is no model to read it. Rebuilt with the checker.</summary>
+    public static ScreenWatcher? CreateScreenWatcher(Settings settings, HttpClient http, ILogger log, ModelStats? stats = null) =>
+        settings.WatchScreen && Model(settings, http, stats, ScreenWatcher.ReplyFormat, timeout: ScreenTimeout) is { } model ? new ScreenWatcher(ScreenCapture.Capture, model, log) : null;
+
+    // A picture takes the model longer than a sentence.
+    private static readonly TimeSpan ScreenTimeout = TimeSpan.FromSeconds(20);
 
     /// <summary>A model client for these settings and the stored key, held to <paramref name="replyFormat"/>; null without both.</summary>
     public static FoundryClient? Model(Settings settings, HttpClient http, ModelStats? stats = null, string? replyFormat = null, int maxTokens = 300,

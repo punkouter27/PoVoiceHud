@@ -21,6 +21,9 @@ public sealed partial class MainWindow : WindowEx
     private LiveLineViewModel? _slid;   // the newest line that has slid in: a line scrolled back into view does not slide again
     private Storyboard? _pulse;
     private double _fullHeight;   // the window's height before compact mode, in DIPs
+    private bool _scrollQueued;   // a scroll to the end is waiting for the layout pass to finish
+    private readonly (SelectorBarItem Tab, IconElement Icon)[] _tabIcons;
+    private const double TabIconsWidth = 640;   // below this, in DIPs, the tabs drop their icons
 
     public MainWindow(HudViewModel viewModel)
     {
@@ -31,7 +34,12 @@ public sealed partial class MainWindow : WindowEx
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragArea);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
-        Root.SizeChanged += (_, _) => KeepClearOfCaptionButtons();
+        _tabIcons = [.. new[] { LiveTab, FactsTab, CodeTab, ScreenTab, HistoryTab }.Select(t => (t, t.Icon))];
+        Root.SizeChanged += (_, e) =>
+        {
+            KeepClearOfCaptionButtons();
+            FitTabs(e.NewSize.Width);
+        };
         PageSwitch.SelectedItem = Tab(ViewModel.Page);   // from the view model, not the markup, so a page chosen before load sticks
         ViewModel.PropertyChanged += (_, e) =>
         {
@@ -46,9 +54,16 @@ public sealed partial class MainWindow : WindowEx
         {
             if (!e.IsIntermediate) _follow = LiveScroll.VerticalOffset >= LiveScroll.ScrollableHeight - 40;
         };
+        // After the layout pass, not inside it: scrolling from SizeChanged while lines are added and the oldest removed can
+        // set off another layout, which WinUI ends with a LayoutCycleException (seen once, after a burst of lines in a long call).
         LiveList.SizeChanged += (_, _) =>
         {
-            if (_follow) LiveScroll.ChangeView(null, LiveScroll.ScrollableHeight, null, disableAnimation: true);
+            if (!_follow || _scrollQueued) return;
+            _scrollQueued = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                _scrollQueued = false;
+                if (_follow) LiveScroll.ChangeView(null, LiveScroll.ScrollableHeight, null, disableAnimation: true);
+            });
         };
     }
 
@@ -67,11 +82,20 @@ public sealed partial class MainWindow : WindowEx
             CaptionSpace.Width = new GridLength(AppWindow.TitleBar.RightInset / root.RasterizationScale);
     }
 
+    /// <summary>Narrow windows drop the tab icons, so the tabs, the count and Copy still fit.</summary>
+    private void FitTabs(double width)
+    {
+        foreach (var (tab, icon) in _tabIcons) tab.Icon = width < TabIconsWidth ? null : icon;
+    }
+
     private void PageSwitch_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) =>
         ViewModel.Page = sender.SelectedItem == FactsTab ? HudPage.Facts : sender.SelectedItem == CodeTab ? HudPage.Code
-            : sender.SelectedItem == HistoryTab ? HudPage.History : HudPage.Live;
+            : sender.SelectedItem == ScreenTab ? HudPage.Screen : sender.SelectedItem == HistoryTab ? HudPage.History : HudPage.Live;
 
-    private SelectorBarItem Tab(HudPage page) => page switch { HudPage.Facts => FactsTab, HudPage.Code => CodeTab, HudPage.History => HistoryTab, _ => LiveTab };
+    private SelectorBarItem Tab(HudPage page) => page switch
+    {
+        HudPage.Facts => FactsTab, HudPage.Code => CodeTab, HudPage.Screen => ScreenTab, HudPage.History => HistoryTab, _ => LiveTab,
+    };
 
     /// <summary>The highlight colour of a line fades in when its verdict lands, and the newest line slides up into place.</summary>
     private void Live_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
@@ -263,7 +287,7 @@ public sealed partial class MainWindow : WindowEx
 #if DEBUG
     /// <summary>
     /// A conversation with every kind of line, for layout checks: run a Debug build with --demo (--facts for the Facts page,
-    /// --code for Code facts).
+    /// --code for Code facts, --screen for Screen facts).
     /// </summary>
     public void SeedDemo()
     {
@@ -305,6 +329,22 @@ public sealed partial class MainWindow : WindowEx
             var line = new TranscriptLine(SourceHint.Mic, now.AddSeconds(at - 270), text);
             ViewModel.AddTranscript(line);
             ViewModel.PushCode(new CodeChecked(line, fact));
+        }
+        // The screen: a field-work form is open, and two things said about it are checked against it.
+        ViewModel.WatchesScreen = true;
+        ViewModel.ShowScreen(new Core.Screen.ScreenSeen(now.AddSeconds(-40), "Field Work Approval, JSA tab: \"COV storm drain outfall verification\". " +
+            "Start date: 09/28/2026; end date: 09/28/2026. Field work lead: Cindy Clark. Location: I-5 bridge and Columbia Way. Status: Approved. " +
+            "JSA form submitted 09/17/2026 by Cindy Clark."));
+        (int At, string Text, Core.Providers.Verdict Verdict, string Reason)[] onScreen =
+        [
+            (267, "Cindy is the lead on the storm drain verification.", Core.Providers.Verdict.Supported, "On screen: The form names Cindy Clark as field work lead."),
+            (268, "That work starts on October 1st.", Core.Providers.Verdict.Contradicted, "On screen: The start date on the form is 09/28/2026."),
+        ];
+        foreach (var (at, text, verdict, reason) in onScreen)
+        {
+            var line = new TranscriptLine(SourceHint.Teams, now.AddSeconds(at - 270), text);
+            ViewModel.AddTranscript(line);
+            ViewModel.Push(new Checked(line, new Core.Providers.Insight(text.TrimEnd('.').Replace("That work", "The storm drain verification"), verdict, reason, 0.9, OnScreen: true)));
         }
         var pending = new TranscriptLine(SourceHint.Mic, now.AddSeconds(-2), "Light from the Sun takes about eight minutes to reach Earth.");
         ViewModel.AddTranscript(pending);

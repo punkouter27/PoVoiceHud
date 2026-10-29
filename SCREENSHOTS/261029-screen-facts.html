@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoVoiceHud — Screen facts (2026-10-29)</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1b1b1f; --soft: #5c5f66; --line: #d9dbe0; --bg: #f6f7f9; --card: #ffffff; --mark: #c81e2d; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #ececf1; --soft: #a3a7b0; --line: #34363c; --bg: #17181b; --card: #212327; } }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h3 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  p.lead { color: var(--soft); margin: 0 0 20px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
+  .side { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; min-width: 0; }
+  .shot { position: relative; }
+  .shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .pin { position: absolute; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%; background: var(--mark); color: #fff;
+         font-weight: 700; font-size: 13px; line-height: 22px; text-align: center; box-shadow: 0 0 0 2px #fff; }
+  ol.notes { list-style: none; margin: 12px 0 0; padding: 0; counter-reset: n; }
+  ol.notes li { counter-increment: n; position: relative; padding-left: 34px; margin: 0 0 10px; }
+  ol.notes li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+                        background: var(--mark); color: #fff; font-weight: 700; font-size: 13px; line-height: 22px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Screen facts</h1>
+  <p class="lead">Debug build with <code>--demo --facts</code> (before, commit d345cf4) and <code>--demo --screen</code> (after, merged with the History, filter and call-mode changes, 2026-10-29), captured with <code>PrintWindow</code>. The numbered notes are under the picture.</p>
+  <div class="side"><div class="shot"><img src="261029-screen-facts.png" alt="Three captures: before, the Facts page with three tabs; after, the Screen facts page at the default size with the current screen description and two verdicts; after, the same page at the minimum width with the tab icons dropped"></div></div>
+  <ol class="notes">
+    <li><b>A Screen tab</b> (Screen facts) between Code and History. Verdicts read off the screen are listed here and no longer on Facts.</li>
+    <li><b>What the screen shows now</b>, in the model's words, with the time it last changed. Select it to copy; hover for the full text.</li>
+    <li><b>Claims checked against the screen</b>, newest first, correct and incorrect only, with the same rows, filter, count and Copy as Facts.</li>
+    <li><b>Below 640 wide</b> the tabs drop their icons, so all five tabs and Copy still fit at the 420 minimum.</li>
+  </ol>
+</main>
+</body>
+</html>

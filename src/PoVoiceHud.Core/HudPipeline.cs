@@ -6,6 +6,7 @@ using PoVoiceHud.Core.Audio;
 using PoVoiceHud.Core.Providers;
 using PoVoiceHud.Core.Providers.FactCheck;
 using PoVoiceHud.Core.Repos;
+using PoVoiceHud.Core.Screen;
 using PoVoiceHud.Core.Vad;
 
 namespace PoVoiceHud.Core;
@@ -22,7 +23,7 @@ public sealed record CodeChecked(TranscriptLine Line, CodeFact Fact);
 /// <summary>
 /// Audio frames → VAD → utterances → Whisper → fact checker, or <see cref="Code"/> for a sentence about the code repository
 /// (questions too). Utterances are transcribed one at a time; up to <see cref="ParallelChecks"/> sentences are checked at once. Muting bumps a generation counter so anything already in
-/// flight is discarded when it completes.
+/// flight is discarded when it completes. With <see cref="Screen"/>, each check also gets what is on the screen.
 /// </summary>
 public sealed partial class HudPipeline : IDisposable
 {
@@ -35,6 +36,8 @@ public sealed partial class HudPipeline : IDisposable
     private readonly ITranscriber _transcriber;
     private volatile IFactChecker _checker;
     private volatile CodeAnswerer? _code;
+    private ScreenWatcher? _screen;
+    private bool _started;
     private readonly ILogger<HudPipeline> _log;
     private readonly UtteranceSegmenter _segmenter = new();
     // Not SingleReader: the mute setter drains it from the UI thread while the worker is the normal consumer.
@@ -45,6 +48,7 @@ public sealed partial class HudPipeline : IDisposable
     private readonly Channel<Checked> _verdicts = Channel.CreateUnbounded<Checked>();
     private readonly Channel<CodeChecked> _codeFacts = Channel.CreateUnbounded<CodeChecked>();
     private readonly Channel<string> _status = Channel.CreateUnbounded<string>();
+    private readonly Channel<ScreenSeen> _screens = Channel.CreateUnbounded<ScreenSeen>();
     private readonly Channel<(TranscriptLine Line, bool Busy)> _checking = Channel.CreateUnbounded<(TranscriptLine, bool)>();
     private readonly CancellationTokenSource _cts = new();
     private readonly object _vadGate = new();
@@ -65,6 +69,8 @@ public sealed partial class HudPipeline : IDisposable
     public ChannelReader<Checked> Verdicts => _verdicts.Reader;
     public ChannelReader<CodeChecked> CodeFacts => _codeFacts.Reader;
     public ChannelReader<string> Status => _status.Reader;
+    /// <summary>Each new description of the screen, for the session log.</summary>
+    public ChannelReader<ScreenSeen> Screens => _screens.Reader;
 
     /// <summary>The fact checker; replaced when only its settings change, so Whisper and the audio keep running.</summary>
     public IFactChecker Checker
@@ -84,6 +90,24 @@ public sealed partial class HudPipeline : IDisposable
         set => _code = value;
     }
 
+    /// <summary>
+    /// Watches the screen so checks can be judged against it; null when that is switched off. Replaced along with
+    /// <see cref="Checker"/>: the old one stops, and the new one starts if the pipeline is running.
+    /// </summary>
+    public ScreenWatcher? Screen
+    {
+        get => Volatile.Read(ref _screen);
+        set
+        {
+            var old = Interlocked.Exchange(ref _screen, value);
+            old?.Dispose();
+            if (value is null) return;
+            value.IsPaused = IsMuted;
+            value.Seen += seen => _screens.Writer.TryWrite(seen);
+            if (Volatile.Read(ref _started)) value.Start();
+        }
+    }
+
     /// <summary>A line is queued for the fact checker (Busy) and done with it, with or without a verdict, or dropped by mute.</summary>
     public ChannelReader<(TranscriptLine Line, bool Busy)> Checking => _checking.Reader;
 
@@ -93,6 +117,7 @@ public sealed partial class HudPipeline : IDisposable
         set
         {
             _audio.IsMuted = value;
+            if (Screen is { } screen) screen.IsPaused = value;
             if (value)
             {
                 Interlocked.Increment(ref _generation);
@@ -114,6 +139,8 @@ public sealed partial class HudPipeline : IDisposable
         _ = Task.Run(WorkAsync);
         _ = Task.Run(CheckAsync);
         _audio.Start();
+        Volatile.Write(ref _started, true);
+        Screen?.Start();
     }
 
     /// <summary>Latest frame loudness on a 0–1 scale (−60 dBFS → 0, 0 dBFS → 1); 0 while muted. For the mic meter.</summary>
@@ -205,10 +232,11 @@ public sealed partial class HudPipeline : IDisposable
             await Parallel.ForEachAsync(_checks.Reader.ReadAllAsync(_cts.Token), options, async (item, ct) =>
             {
                 var (line, context, generation, code) = item;
+                var screen = Screen?.Current;
                 try
                 {
                     // Not about the code after all (a follow-on that changed the subject): a claim still gets the ordinary check.
-                    var fact = code && Code is { } answerer ? await answerer.AskAsync(line.Text, context, ct) : null;
+                    var fact = code && Code is { } answerer ? await answerer.AskAsync(line.Text, context, screen, ct) : null;
                     if (fact is not null)
                     {
                         Recovered();
@@ -216,7 +244,7 @@ public sealed partial class HudPipeline : IDisposable
                     }
                     else if (FactChecker.IsCandidate(line.Text))
                     {
-                        var verdict = await Checker.CheckAsync(line.Text, context, ct);
+                        var verdict = await Checker.CheckAsync(line.Text, context, screen, ct);
                         Recovered();
                         if (verdict is not null && generation == Volatile.Read(ref _generation)) _verdicts.Writer.TryWrite(new Checked(line, verdict));
                     }
@@ -252,6 +280,7 @@ public sealed partial class HudPipeline : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
+        Screen = null;
         _audio.FrameAvailable -= OnFrame;
         _audio.Stop();
         // Readers (the UI's drain loops) end instead of waiting forever on a pipeline that is gone.
@@ -260,6 +289,7 @@ public sealed partial class HudPipeline : IDisposable
         _codeFacts.Writer.TryComplete();
         _status.Writer.TryComplete();
         _checking.Writer.TryComplete();
+        _screens.Writer.TryComplete();
         _cts.Dispose();
     }
 }

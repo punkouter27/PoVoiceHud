@@ -23,9 +23,10 @@ public static class VerdictExtensions
 
 /// <summary>
 /// The verdict on one spoken claim. <see cref="LinkChecked"/> means <see cref="Link"/> is a page the app fetched itself
-/// (a Wikipedia article), not a URL the model wrote.
+/// (a Wikipedia article), not a URL the model wrote. <see cref="OnScreen"/> means it was judged from what is on the screen,
+/// so it is listed on Screen facts rather than Facts.
 /// </summary>
-public sealed record Insight(string Claim, Verdict Verdict, string Reason, double Confidence, Uri? Link = null, bool LinkChecked = false)
+public sealed record Insight(string Claim, Verdict Verdict, string Reason, double Confidence, Uri? Link = null, bool LinkChecked = false, bool OnScreen = false)
 {
     /// <summary>"✅ Correct — Completed in March 1889."</summary>
     public string Answer => $"{Verdict.Emoji()} {Verdict.Label()} — {Reason}";

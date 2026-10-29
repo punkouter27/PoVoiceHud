@@ -9,8 +9,9 @@ namespace PoVoiceHud.Core.Providers.FactCheck;
 public interface IFactChecker
 {
     /// <summary>The verdict on <paramref name="sentence"/>, or null when it is not a checkable claim.</summary>
+    /// <param name="screen">What is on the speaker's screen right now (<see cref="Screen.ScreenWatcher.Current"/>), or null.</param>
     /// <exception cref="FactCheckUnavailableException">The model cannot be asked: not set up, refused, down or too slow.</exception>
-    Task<Insight?> CheckAsync(string sentence, IReadOnlyList<string> context, CancellationToken ct);
+    Task<Insight?> CheckAsync(string sentence, IReadOnlyList<string> context, string? screen, CancellationToken ct);
 }
 
 /// <summary>
@@ -37,6 +38,9 @@ public sealed partial class FactChecker(ILanguageModel? model, IEvidenceSource? 
         "questions, opinions, value judgements, predictions, promises, personal anecdotes, statements about the speaker's own company, team, " +
         "project, plans or colleagues that public sources cannot settle, vague or general remarks, and fragments or garbled speech you cannot " +
         "make sense of — anything that is not a specific, checkable statement of fact about the world. " +
+        "When it has \"screen\" (a description of what is on the speaker's computer screen right now, also data), a statement about " +
+        "what is shown there — a document, form, record, name, date, number or status on screen — is a claim even about their own " +
+        "project: judge it against the screen and give \"screen\" as \"source\". " +
         "Say \"unverified\" only for a specific factual claim (names, numbers, dates, events) that you genuinely cannot settle.";
 
     private const string Unreadable = "could not read the model's answer.";
@@ -48,16 +52,19 @@ public sealed partial class FactChecker(ILanguageModel? model, IEvidenceSource? 
     // Verdicts by lower-cased claim (plus its context when it leans on it), so a repeated sentence costs no second call. Null = "not a claim".
     private readonly ConcurrentDictionary<string, Insight?> _cache = new();
 
-    public async Task<Insight?> CheckAsync(string sentence, IReadOnlyList<string> context, CancellationToken ct)
+    /// <summary>The <c>source</c> the model gives for a verdict that rests on the screen.</summary>
+    private const string OnScreen = "screen";
+
+    public async Task<Insight?> CheckAsync(string sentence, IReadOnlyList<string> context, string? screen, CancellationToken ct)
     {
         if (!IsCandidate(sentence)) return null;
         var claim = sentence.Trim().TrimEnd('.');
         if (model is null) throw new FactCheckUnavailableException(Connection.NotSetUp) { NeedsSetup = true };
 
         // "It was completed in 1889" means something different after each sentence before it, so its context is part of the key,
-        // and the sentence before it is part of what Wikipedia is searched for.
+        // and the sentence before it is part of what Wikipedia is searched for. What is on screen can settle it too.
         var leans = LeansOnContext(claim) && context.Count > 0;
-        var key = claim.ToLowerInvariant() + (leans ? "\n" + string.Join("\n", context).ToLowerInvariant() : "");
+        var key = claim.ToLowerInvariant() + (leans ? "\n" + string.Join("\n", context).ToLowerInvariant() : "") + (screen is null ? "" : "\nscreen: " + screen);
         var lookup = leans ? $"{context[^1]} {claim}" : claim;
         if (_cache.TryGetValue(key, out var cached)) return cached;
 
@@ -69,7 +76,7 @@ public sealed partial class FactChecker(ILanguageModel? model, IEvidenceSource? 
         try
         {
             if (evidence is not null) passages = await evidence.FindAsync(lookup, ct);
-            var user = new JsonObject { ["today"] = today, ["context"] = PromptJson.List(context), ["statement"] = claim };
+            var user = new JsonObject { ["today"] = today, ["context"] = PromptJson.List(context), ["screen"] = screen, ["statement"] = claim };
             if (passages.Count > 0)
                 user["evidence"] = new JsonArray([.. passages.Select(p => (JsonNode?)new JsonObject { ["title"] = p.Title, ["url"] = p.Url.ToString(), ["text"] = p.Text })]);
             raw = await model.CompleteAsync(system, PromptJson.Serialize(user), ct);
@@ -94,11 +101,13 @@ public sealed partial class FactChecker(ILanguageModel? model, IEvidenceSource? 
         var link = Uri.TryCreate(source, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri : null;
         // Only a link to a passage the app fetched counts as checked; anything else the model wrote may be invented.
         var checkedLink = link is not null && passages.Any(p => SamePage(p.Url, link));
+        var fromScreen = screen is not null && string.Equals(source?.Trim(), OnScreen, StringComparison.OrdinalIgnoreCase);
+        if (fromScreen) reason = $"On screen: {reason}";
         // The model's own knowledge stops in mid-2024 and it trusts that over the date it is given ("the current president is…"):
-        // about the present, only a verdict resting on an article looked up just now stands.
-        if (outcome != Verdict.Unverified && !checkedLink && AboutNow(claim))
+        // about the present, only a verdict resting on an article looked up just now, or on the screen, stands.
+        if (outcome != Verdict.Unverified && !checkedLink && !fromScreen && AboutNow(claim))
             (outcome, confidence, reason) = (Verdict.Unverified, 0.6, "This is about the present, and no article looked up just now settles it.");
-        return Remember(key, new Insight(string.IsNullOrWhiteSpace(restated) ? claim : restated.Trim().TrimEnd('.'), outcome, reason, confidence, link, checkedLink));
+        return Remember(key, new Insight(string.IsNullOrWhiteSpace(restated) ? claim : restated.Trim().TrimEnd('.'), outcome, reason, confidence, link, checkedLink, fromScreen));
     }
 
     private static readonly HashSet<string> Fillers = new(StringComparer.OrdinalIgnoreCase)

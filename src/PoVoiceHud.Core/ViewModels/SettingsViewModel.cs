@@ -9,7 +9,7 @@ namespace PoVoiceHud.Core.ViewModels;
 
 /// <summary>
 /// Edits <see cref="Settings"/> plus two secrets: the Foundry endpoint and key, the optional code repository and its access
-/// token, then three switches. Nothing changes until <see cref="ApplyCommand"/>, which first makes one real call to the model
+/// token, then four switches. Nothing changes until <see cref="ApplyCommand"/>, which first makes one real call to the model
 /// whenever the endpoint or key changed (or setup is needed), and reads a new repository, so a wrong one is caught here.
 /// <see cref="CancelCommand"/> puts back what was applied. A secret is written only when typed (blank keeps the stored one).
 /// </summary>
@@ -37,6 +37,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>How loud the cues are, 0–100.</summary>
     [ObservableProperty] private double _cueVolume;
     [ObservableProperty] private bool _callsOnly;
+    [ObservableProperty] private bool _watchScreen;
     /// <summary>
     /// What the last Apply found: "✓ Connected…", "✗ The key was refused…", "Checking the connection…", or "" for nothing.
     /// Never null: the page binds functions to it, and x:Bind does not call a function whose argument is null, so the dot
@@ -61,6 +62,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _sounds = settings.Sounds;
         _cueVolume = settings.CueVolume;
         _callsOnly = settings.CallsOnly;
+        _watchScreen = settings.WatchScreen;
         _hasKey = readSecret(CredentialStore.FoundryKey) is not null;
     }
 
@@ -84,6 +86,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Sounds = Sounds,
         CueVolume = (int)Math.Round(Math.Clamp(CueVolume, 0, 100)),
         CallsOnly = CallsOnly,
+        WatchScreen = WatchScreen,
     };
 
     /// <summary>The endpoint or key cannot be used (or was never set): the app stays in Settings until Apply succeeds.</summary>
@@ -105,6 +108,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Sounds = _original.Sounds;
         CueVolume = _original.CueVolume;
         CallsOnly = _original.CallsOnly;
+        WatchScreen = _original.WatchScreen;
         if (!RequiresSetup) Message = "";
     }
 

@@ -29,7 +29,7 @@ public sealed class ContentFilteredException : Exception
 /// <param name="stats">Where each call's time, tokens, retries and failures are counted, if anywhere.</param>
 /// <param name="maxTokens">The longest reply: a verdict needs 300; a meeting's summary more.</param>
 public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey, ResiliencePipeline? retry = null, TimeSpan? timeout = null,
-    string? responseFormat = null, ModelStats? stats = null, int maxTokens = 300) : ILanguageModel
+    string? responseFormat = null, ModelStats? stats = null, int maxTokens = 300) : ILanguageModel, IVisionModel
 {
     /// <summary>
     /// ~1–1.5 s per verdict on a GlobalStandard deployment, and it honours the JSON schema natively. The resource must have
@@ -71,7 +71,15 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
         endpoint.AbsolutePath is "" or "/" ? new Uri(endpoint, $"/models/chat/completions?api-version={ApiVersion}") : endpoint;
 
     /// <summary>Throws HttpRequestException on transport/HTTP failure and TimeoutException when an attempt gets no reply in time.</summary>
-    public async Task<string> CompleteAsync(string system, string user, CancellationToken ct)
+    public Task<string> CompleteAsync(string system, string user, CancellationToken ct) => SendAsync(system, user, ct);
+
+    /// <summary>The same, with a picture after the text (a data URL: nothing is uploaded anywhere else).</summary>
+    public Task<string> CompleteAsync(string system, string user, ReadOnlyMemory<byte> jpeg, CancellationToken ct) =>
+        SendAsync(system, new JsonArray(
+            new JsonObject { ["type"] = "text", ["text"] = user },
+            new JsonObject { ["type"] = "image_url", ["image_url"] = new JsonObject { ["url"] = "data:image/jpeg;base64," + Convert.ToBase64String(jpeg.Span) } }), ct);
+
+    private async Task<string> SendAsync(string system, JsonNode user, CancellationToken ct)
     {
         var body = new JsonObject
         {

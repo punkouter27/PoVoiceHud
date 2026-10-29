@@ -16,6 +16,7 @@ using PoVoiceHud.Core.Diagnostics;
 using PoVoiceHud.Core.Providers;
 using PoVoiceHud.Core.Providers.FactCheck;
 using PoVoiceHud.Core.Repos;
+using PoVoiceHud.Core.Screen;
 using PoVoiceHud.Core.Sessions;
 using PoVoiceHud.Core.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
@@ -138,15 +139,17 @@ public partial class App : Application
 
 #if DEBUG
         // Layout checks without a microphone: --demo seeds a sample conversation (--facts opens the Facts page, --code Code facts,
-        // --history History, --compact the header alone, --settings the Settings page, --setup the first-run page).
+        // --screen Screen facts, --history History, --compact the header alone, --settings the Settings page, --setup the first-run page).
         var flags = Environment.GetCommandLineArgs();
         if (Demo)
         {
             _settings = _settings with { Sounds = false };   // the demo is for looking at, not listening to
+            CaptureExclusion.Set(_window.GetWindowHandle(), false);   // the demo watches nothing, and is there to be captured
             if (flags.Contains("--scripted")) _ = ScriptedDemoAsync();
             else _window.SeedDemo();
             if (flags.Contains("--facts")) viewModel.Page = HudPage.Facts;
             if (flags.Contains("--code")) viewModel.Page = HudPage.Code;
+            if (flags.Contains("--screen")) viewModel.Page = HudPage.Screen;
             if (flags.Contains("--history")) viewModel.Page = HudPage.History;
             if (flags.Contains("--compact")) viewModel.IsCompact = true;
             if (flags.Contains("--settings")) viewModel.IsSettingsOpen = true;
@@ -197,13 +200,13 @@ public partial class App : Application
             await Task.Delay(900);
             var line = new TranscriptLine(who, DateTimeOffset.Now, said);
             viewModel.AddTranscript(line);
-            if (answerer?.IsAbout(said, context) == true && await answerer.AskAsync(said, context, CancellationToken.None) is { } fact)
+            if (answerer?.IsAbout(said, context) == true && await answerer.AskAsync(said, context, null, CancellationToken.None) is { } fact)
                 viewModel.PushCode(new CodeChecked(line, fact));
             else if (FactChecker.IsCandidate(said))
             {
                 viewModel.MarkChecking(line, busy: true);
                 await Task.Delay(600);
-                if (await checker.CheckAsync(said, context, CancellationToken.None) is { } verdict) viewModel.Push(new Checked(line, verdict));
+                if (await checker.CheckAsync(said, context, null, CancellationToken.None) is { } verdict) viewModel.Push(new Checked(line, verdict));
                 viewModel.MarkChecking(line, busy: false);
             }
             context.Add(said);
@@ -255,6 +258,8 @@ public partial class App : Application
     {
         _window!.Animations = settings.Sounds && new UISettings().AnimationsEnabled;
         SoundPalette.Volume = Math.Clamp(settings.CueVolume, 0, 100) / 100f;
+        // While the screen is watched the HUD stays out of the pictures (and out of screen sharing), so it never checks its own verdicts.
+        CaptureExclusion.Set(_window.GetWindowHandle(), settings.WatchScreen && !Demo);
         if (Demo) return;
         _callsOnly = settings.CallsOnly;
         if (settings.CallsOnly && _calls is null)
@@ -394,6 +399,12 @@ public partial class App : Application
             var code = container.GetRequiredService<CodeRepositories>().All;
             viewModel.HasRepository = code.Count > 0;
             viewModel.HasRepositories = code.Count > 1;
+            viewModel.WatchesScreen = pipeline.Screen is not null;
+            _ = Drain(pipeline.Screens, seen =>
+            {
+                viewModel.ShowScreen(seen);
+                Sessions.Append(new SessionEntry { At = seen.At, Screen = seen.Summary });
+            });
             _ = Drain(pipeline.CodeFacts, result =>
             {
                 viewModel.PushCode(result);
@@ -414,9 +425,9 @@ public partial class App : Application
                 });
             });
             pipeline.Start();
-            _log.LogInformation("Listening: {Model} at {Host}, Wikipedia {LookUp}, repositories {Files}", FoundryClient.Model,
+            _log.LogInformation("Listening: {Model} at {Host}, Wikipedia {LookUp}, repositories {Files}, screen {Screen}", FoundryClient.Model,
                 Uri.TryCreate(settings.FoundryEndpoint, UriKind.Absolute, out var host) ? host.Host : "none", settings.LookUpClaims ? "on" : "off",
-                code.Count == 0 ? "none" : string.Join(", ", code.Select(c => $"{c.Name} ({c.Index.Symbols.Count} names)")));
+                code.Count == 0 ? "none" : string.Join(", ", code.Select(c => $"{c.Name} ({c.Index.Symbols.Count} names)")), pipeline.Screen is null ? "off" : "watched");
             // After the audio's own "Listening", so it is not overwritten straight away; waiting for a call says so instead.
             if (repoWarning is not null) _ = Task.Delay(1500).ContinueWith(_ => Status(repoWarning), TaskScheduler.Default);
             else if (_callsOnly) _ = Task.Delay(1500).ContinueWith(_ => window.DispatcherQueue.TryEnqueue(Listen), TaskScheduler.Default);
@@ -444,16 +455,18 @@ public partial class App : Application
             await StartAsync(settings);
             return;
         }
-        // The endpoint, key and Wikipedia switch are the checker's, and sounds and start-up the app's: Whisper and the audio keep running.
+        // The endpoint, key, Wikipedia and screen switches are the checker's, and sounds and start-up the app's: Whisper and the audio keep running.
         // A new repository or token means fetching it again, and a pipeline that is not running yet (loading, or failed) is built afresh.
         if (_pipeline is { } pipeline && CredentialStore.Read(CredentialStore.RepoToken) == _repoToken && settings with
             {
                 FoundryEndpoint = old.FoundryEndpoint, LookUpClaims = old.LookUpClaims, Sounds = old.Sounds, StartWithWindows = old.StartWithWindows,
-                CueVolume = old.CueVolume, CallsOnly = old.CallsOnly,
+                CueVolume = old.CueVolume, CallsOnly = old.CallsOnly, WatchScreen = old.WatchScreen,
             } == old)
         {
             pipeline.Checker = ServiceCollectionExtensions.CreateChecker(settings, Http, Stats);
             pipeline.Code = ServiceCollectionExtensions.CreateCodeAnswerer(settings, Http, _container?.GetService<CodeRepositories>()?.All ?? [], Stats);
+            pipeline.Screen = ServiceCollectionExtensions.CreateScreenWatcher(settings, Http, _fileLog.CreateLogger(nameof(ScreenWatcher)), Stats);
+            viewModel.WatchesScreen = pipeline.Screen is not null;
             _log.LogInformation("Settings applied; new fact checker");
             viewModel.SetStatus("Settings applied");
             return;

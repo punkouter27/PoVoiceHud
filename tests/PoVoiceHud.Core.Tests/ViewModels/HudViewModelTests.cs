@@ -23,6 +23,32 @@ public class HudViewModelTests
     private static Insight Judged(string claim, Verdict verdict, string reason = "Because.") => new(claim, verdict, reason, 0.9);
 
     [Fact]
+    public void A_verdict_read_off_the_screen_goes_to_Screen_facts_under_what_the_screen_shows_and_not_to_Facts()
+    {
+        Assert.False(_vm.HasScreenNow);
+        _vm.WatchesScreen = true;
+        _vm.ShowScreen(new PoVoiceHud.Core.Screen.ScreenSeen(T0, "JSA form: start date 09/28/2026."));
+        Assert.True(_vm.HasScreenNow);
+        Assert.Equal("JSA form: start date 09/28/2026.", _vm.ScreenNow);
+        Assert.Equal($"On screen since {T0.ToString("t", CultureInfo.CurrentCulture)}", _vm.ScreenSince);
+
+        var line = Line("The work starts on October 1st.");
+        _vm.AddTranscript(line);
+        _vm.Push(new Checked(line, new Insight("The work starts on October 1st", Verdict.Contradicted, "On screen: The form says 09/28/2026.", 0.9, OnScreen: true)));
+        _vm.Push(new Checked(Line("Paris is in France.", 2), Judged("Paris is in France", Verdict.Supported)));
+
+        var onScreen = Assert.Single(_vm.ScreenFacts);
+        Assert.Equal("The work starts on October 1st", onScreen.Claim);
+        Assert.Equal("Paris is in France", Assert.Single(_vm.Facts).Claim);
+        Assert.Equal("0 correct · 1 incorrect", _vm.ScreenSummary);
+        Assert.Equal(LineState.Incorrect, _vm.Live[0].State);   // the Live line is marked as any other
+
+        _vm.Page = HudPage.Screen;
+        Assert.True(_vm.CanCopy);
+        Assert.Equal("❌ Incorrect: The work starts on October 1st — On screen: The form says 09/28/2026.", _vm.CopyText);
+    }
+
+    [Fact]
     public void A_line_shows_checking_while_it_is_with_the_checker_then_its_verdict_in_plain_words()
     {
         var line = Line("Python was created by Dennis Ritchie.");

@@ -5,13 +5,15 @@ using PoVoiceHud.Core.Config;
 
 namespace PoVoiceHud.Core.Sessions;
 
-/// <summary>One line of sessions\{date}.jsonl: a heard sentence sets Heard; a verdict sets Claim, Answer and Verdict.</summary>
+/// <summary>One line of sessions\{date}.jsonl: a heard sentence sets Heard; a verdict sets Claim, Answer and Verdict; a new screen sets Screen.</summary>
 public sealed record SessionEntry
 {
     public DateTimeOffset At { get; init; }
     /// <summary>Who said it: "Mic" or "Teams" (<see cref="Audio.SourceHint"/>).</summary>
     public string? Source { get; init; }
     public string? Heard { get; init; }
+    /// <summary>What the screen showed from this time on, in the model's words.</summary>
+    public string? Screen { get; init; }
     public string? Claim { get; init; }
     public string? Answer { get; init; }
     public string? Verdict { get; init; }
