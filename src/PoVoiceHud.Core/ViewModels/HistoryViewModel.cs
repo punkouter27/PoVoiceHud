@@ -20,8 +20,9 @@ public sealed record HistoryRow(string Time, string Speaker, string Text, LineSt
 /// </summary>
 /// <param name="summarize">Sums up a day's entries with the model; null until the app is connected.</param>
 /// <param name="export">Writes the Markdown for a day somewhere the user can open it, and opens it.</param>
+/// <param name="share">Posts a day's summary to the chat webhook (or opens an email draft) and says how it went.</param>
 public sealed partial class HistoryViewModel(SessionLog log, Func<IReadOnlyList<SessionEntry>, CancellationToken, Task<SessionSummary?>>? summarize,
-    Func<DateOnly, string, Task> export) : ObservableObject
+    Func<DateOnly, string, Task> export, Func<DateOnly, string, Task<string>>? share = null) : ObservableObject
 {
     private List<DateOnly> _days = [];
     private IReadOnlyList<SessionEntry> _entries = [];
@@ -29,7 +30,7 @@ public sealed partial class HistoryViewModel(SessionLog log, Func<IReadOnlyList<
     [ObservableProperty] private int _dayIndex = -1;
     [ObservableProperty] private string _search = "";
     /// <summary>The day's summary as Markdown, or "" when it has none yet.</summary>
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasSummary))] private string _summary = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasSummary))] [NotifyCanExecuteChangedFor(nameof(ShareCommand))] private string _summary = "";
     [ObservableProperty] private string _message = "";
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(SummarizeCommand))] private bool _isSummarizing;
 
@@ -83,7 +84,7 @@ public sealed partial class HistoryViewModel(SessionLog log, Func<IReadOnlyList<
     }
 
     private static HistoryRow Row(SessionEntry entry) => entry.Heard is { } heard
-        ? new HistoryRow(entry.At.ToString("t", CultureInfo.CurrentCulture), SessionSummarizer.Speaker(entry.Source), heard, LineState.Heard)
+        ? new HistoryRow(entry.At.ToString("t", CultureInfo.CurrentCulture), SessionSummarizer.Speaker(entry.Source, entry.Voice), heard, LineState.Heard)
         : new HistoryRow("", "", WithoutEmoji(entry.Answer ?? entry.Claim ?? ""), entry.Verdict switch
         {
             nameof(Verdict.Supported) => LineState.Correct,
@@ -130,6 +131,16 @@ public sealed partial class HistoryViewModel(SessionLog log, Func<IReadOnlyList<
         {
             IsSummarizing = false;
         }
+    }
+
+    private bool CanShare() => share is not null && HasSummary;
+
+    /// <summary>The day's summary to the chat channel (or an email draft): the button beside Export.</summary>
+    [RelayCommand(CanExecute = nameof(CanShare))]
+    private async Task Share()
+    {
+        if (Day is not { } day || share is null) return;
+        Message = await share(day, Summary);
     }
 
     /// <summary>The day on show, with its summary, as a Markdown document that opens when written.</summary>

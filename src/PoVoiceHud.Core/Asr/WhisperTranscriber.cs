@@ -6,7 +6,7 @@ using Whisper.net.LibraryLoader;
 namespace PoVoiceHud.Core.Asr;
 
 /// <summary>
-/// Whisper.net on the CPU runtime. The encoder cost is set by audio_ctx (50 per second, 1500 = 30 s), so
+/// Whisper.net on the CPU runtime, or on the graphics card through Vulkan after <see cref="UseGpu"/>. The encoder cost is set by audio_ctx (50 per second, 1500 = 30 s), so
 /// utterances up to 10 s use a 512-context processor (~3x faster, same text on the fixture) and longer ones the full window.
 /// An optional prompt (a glossary of names) steers spelling; changing it rebuilds the processors before the next utterance.
 /// </summary>
@@ -17,6 +17,7 @@ public sealed class WhisperTranscriber : ITranscriber
 
     private readonly WhisperFactory _factory;
     private readonly int _threads;
+    private readonly string _language;
     private readonly SemaphoreSlim _one = new(1, 1);
     private WhisperProcessor _short;
     private WhisperProcessor _long;
@@ -25,10 +26,28 @@ public sealed class WhisperTranscriber : ITranscriber
 
     static WhisperTranscriber() => RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cpu];
 
-    public WhisperTranscriber(string modelPath, int threads, string? prompt = null)
+    /// <summary>
+    /// Vulkan first, then the CPU: Whisper.net loads the first runtime that works, so a PC without a Vulkan driver still
+    /// transcribes. The native library is loaded once per process, so this counts only before the first transcriber is built.
+    /// </summary>
+    public static void UseGpu(bool gpu) => RuntimeOptions.RuntimeLibraryOrder = gpu ? [RuntimeLibrary.Vulkan, RuntimeLibrary.Cpu] : [RuntimeLibrary.Cpu];
+
+    /// <summary>"graphics card (Vulkan)" or "CPU": the runtime that was loaded, once a transcriber exists.</summary>
+    public static string Runtime => RuntimeOptions.LoadedLibrary switch
     {
-        _factory = WhisperFactory.FromPath(modelPath);
+        RuntimeLibrary.Vulkan => "graphics card (Vulkan)",
+        RuntimeLibrary.Cuda => "graphics card (CUDA)",
+        RuntimeLibrary.Cpu or RuntimeLibrary.CpuNoAvx => "CPU",
+        null => "not loaded",
+        var other => other.ToString()!,
+    };
+
+    /// <param name="language">"en", another ISO code, or "auto" to detect it (for a multilingual model only).</param>
+    public WhisperTranscriber(string modelPath, int threads, string? prompt = null, string language = "en")
+    {
+        _factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = RuntimeOptions.RuntimeLibraryOrder.FirstOrDefault() != RuntimeLibrary.Cpu });
         _threads = threads;
+        _language = language;
         _prompt = _builtWith = prompt;
         (_short, _long) = Build(prompt);
     }
@@ -62,7 +81,8 @@ public sealed class WhisperTranscriber : ITranscriber
     {
         WhisperProcessorBuilder Builder()
         {
-            var builder = _factory.CreateBuilder().WithLanguage("en").WithThreads(_threads);
+            var builder = _factory.CreateBuilder().WithThreads(_threads);
+            builder = _language == "auto" ? builder.WithLanguageDetection() : builder.WithLanguage(_language);
             return prompt is null ? builder : builder.WithPrompt(prompt);
         }
         return (Builder().WithAudioContextSize(ShortContext).Build(), Builder().Build());

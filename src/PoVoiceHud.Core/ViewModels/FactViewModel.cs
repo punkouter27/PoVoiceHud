@@ -17,16 +17,20 @@ public sealed partial class FactViewModel : ObservableObject
 
     private readonly SpeakerNames? _names;
 
-    public FactViewModel(Insight insight, DateTimeOffset at, SourceHint source, Func<Uri, Task> openUri, SpeakerNames? names = null)
+    /// <param name="voice">Which of the call's voices said it (<see cref="TranscriptLine.Voice"/>).</param>
+    public FactViewModel(Insight insight, DateTimeOffset at, SourceHint source, Func<Uri, Task> openUri, SpeakerNames? names = null, int voice = 0)
     {
         _insight = insight;
         _names = names;
         _time = Clock(at);
         Source = source;
+        Voice = voice;
         OpenLinkCommand = new AsyncRelayCommand(() => insight.Link is null ? Task.CompletedTask : openUri(insight.Link));
     }
 
     public SourceHint Source { get; }
+
+    public int Voice { get; }
 
     /// <summary>How sure the model was, 0–1: the thin bar under the reason.</summary>
     public double Confidence => _insight.Confidence;
@@ -45,7 +49,7 @@ public sealed partial class FactViewModel : ObservableObject
     /// <summary>The claim, and how many times it was said when more than once.</summary>
     public string Title => Claim + (Count > 1 ? $" ×{Count}" : "");
     /// <summary>"You" or "Them", or the names given to them.</summary>
-    public string Speaker => _names?.Of(Source) ?? Source.Speaker();
+    public string Speaker => _names?.Of(Source, Voice) ?? Source.Speaker();
     public bool HasLink => _insight.Link is not null;
 
     /// <summary>

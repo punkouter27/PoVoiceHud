@@ -58,6 +58,7 @@ public partial class App : Application
     private string? _call;   // the call app using the microphone, when there is one
     private bool _callsOnly;   // "Listen only during calls", as last applied
     private int _heardSinceSummary;   // lines heard since the last meeting summary: muting after a real conversation sums it up
+    private DateTimeOffset? _meetingStart;   // when the first of those lines was heard: a shared summary covers this meeting only
 
     public App()
     {
@@ -104,7 +105,7 @@ public partial class App : Application
             (entries, ct) => ServiceCollectionExtensions.CreateSummarizer(_settings, Http, Stats) is { } summarizer
                 ? summarizer.SummarizeAsync(entries, ct)
                 : throw new FactCheckUnavailableException(Connection.NotSetUp) { NeedsSetup = true },
-            ExportAsync);
+            ExportAsync, ShareDayAsync);
         _window = new MainWindow(viewModel);
         _window.Closed += OnClosed;
         _window.Activate();
@@ -126,6 +127,10 @@ public partial class App : Application
             if (_settings.Sounds) SoundPalette.Play(cue);
             if (cue == Cue.Contradicted) _window?.FlashIncorrect();
         };
+        // Azure went down or came back while "Azure, and a local model when Azure is down" is chosen: said once in the header.
+        Stats.Fallback.Switched += local => _window?.DispatcherQueue.TryEnqueue(() => viewModel.SetStatus(local
+            ? $"Azure is not answering: checking with {_settings.LocalModel} on this PC"
+            : "Azure is answering again"));
         _meter = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         var ticks = 0;
         _meter.Tick += (_, _) =>
@@ -139,7 +144,8 @@ public partial class App : Application
 
 #if DEBUG
         // Layout checks without a microphone: --demo seeds a sample conversation (--facts opens the Facts page, --code Code facts,
-        // --screen Screen facts, --history History, --compact the header alone, --settings the Settings page, --setup the first-run page).
+        // --screen Screen facts, --history History, --compact the header alone, --settings the Settings page, --setup the first-run page,
+        // --share the offer to post a meeting's summary).
         var flags = Environment.GetCommandLineArgs();
         if (Demo)
         {
@@ -154,6 +160,8 @@ public partial class App : Application
             if (flags.Contains("--compact")) viewModel.IsCompact = true;
             if (flags.Contains("--settings")) viewModel.IsSettingsOpen = true;
             if (flags.Contains("--setup")) RequireSetup(null);
+            if (flags.Contains("--share"))
+                viewModel.OfferShare($"Summary of the meeting from {DateTime.Now.AddMinutes(-45):t} is ready.", "Post to Slack", () => Task.FromResult("Demo: nothing was posted"));
             return;
         }
 #endif
@@ -164,7 +172,7 @@ public partial class App : Application
         if (settings.StartWithWindows) Autostart.Set(true);   // keeps the entry pointing at this exe if it moved
         _ = CheckUpdatesAsync(userAsked: false);
         // Nothing is heard until there is an endpoint and key to check claims with.
-        if (!FoundryClient.IsReady(settings.FoundryEndpoint, CredentialStore.Read(CredentialStore.FoundryKey) is not null)) RequireSetup(null);
+        if (!Connection.IsReady(settings, CredentialStore.Read(CredentialStore.FoundryKey) is not null)) RequireSetup(null);
         else _ = StartAsync(settings);
         if (warning is not null) viewModel.SetStatus(warning);
     }
@@ -283,9 +291,11 @@ public partial class App : Application
     {
         var call = CallDetector.CurrentCall();
         if (call == _call) return;
+        var ended = _call is not null && call is null;
         _call = call;
         _log.LogInformation("Call {State}", call is null ? "ended" : $"started on {call}");
         Listen();
+        if (ended) _ = SummarizeMeetingAsync();   // the end of a call is the end of a meeting, as muting after one is
     }
 
     /// <summary>
@@ -302,17 +312,56 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Muting after a conversation (a dozen lines or more since the last summary) sums the day up in the background and saves
-    /// it beside the history, where the History page shows it.
+    /// Muting after a conversation, or a call ending (a dozen lines or more since the last summary), sums the day up in the
+    /// background and saves it beside the history, where the History page shows it. With "Offer to share" on, the meeting
+    /// alone (from its first line) is summed up too, and the window offers to post it or email it; nothing goes until asked.
     /// </summary>
     private async Task SummarizeMeetingAsync()
     {
         if (Demo || _heardSinceSummary < 12 || _window?.ViewModel.History is not { } history) return;
-        _heardSinceSummary = 0;
+        var (start, viewModel) = (_meetingStart ?? DateTimeOffset.Now, _window.ViewModel);
+        (_heardSinceSummary, _meetingStart) = (0, null);
         var problem = await history.SummarizeDayAsync(DateOnly.FromDateTime(DateTime.Now), CancellationToken.None);
         _log.LogInformation("Meeting summary: {Result}", problem ?? "saved");
-        if (problem is null) _window.ViewModel.SetStatus("Meeting summary saved: see History");
+        if (problem is not null) return;
+        viewModel.SetStatus("Meeting summary saved: see History");
+        if (!_settings.OfferToShare || ServiceCollectionExtensions.CreateSummarizer(_settings, Http, Stats) is not { } summarizer) return;
+        try
+        {
+            var entries = Sessions.Read(DateOnly.FromDateTime(start.LocalDateTime)).Where(e => e.At >= start).ToList();
+            if (await summarizer.SummarizeAsync(entries, CancellationToken.None) is not { } meeting) return;
+            var title = $"Meeting notes — {start.LocalDateTime:ddd d MMM, HH:mm}–{DateTime.Now:HH:mm}";
+            var markdown = meeting.ToMarkdown();
+            var webhook = Webhook();
+            viewModel.OfferShare($"Summary of the meeting from {start.LocalDateTime:t} is ready.",
+                webhook is null ? "Email it" : $"Post to {SummaryShare.NameOf(webhook)}", () => ShareAsync(title, markdown));
+        }
+        catch (FactCheckUnavailableException e)
+        {
+            _log.LogWarning("Meeting summary to share: {Problem}", e.Message);
+        }
     }
+
+    /// <summary>The chat webhook from Credential Manager, or null for none (or one that is not https).</summary>
+    private static Uri? Webhook() =>
+        CredentialStore.Read(CredentialStore.ShareWebhook) is { } url && SummaryShare.IsValidWebhook(url) ? new Uri(url) : null;
+
+    /// <summary>Posts a summary to the chat webhook, or without one opens an email draft; says how it went.</summary>
+    private async Task<string> ShareAsync(string title, string markdown)
+    {
+        if (Webhook() is not { } webhook)
+        {
+            await OpenAsync(SummaryShare.MailTo(title, markdown));
+            return "Opened an email with the summary";
+        }
+        var problem = await SummaryShare.PostAsync(Http, webhook, title, markdown, CancellationToken.None);
+        _log.LogInformation("Shared a summary to {Target}: {Result}", SummaryShare.NameOf(webhook), problem ?? "posted");
+        return problem is null ? $"Posted the summary to {SummaryShare.NameOf(webhook)}" : $"Not posted: {problem}";
+    }
+
+    /// <summary>The History page's Share: that day's summary.</summary>
+    private Task<string> ShareDayAsync(DateOnly day, string markdown) =>
+        ShareAsync($"Meeting notes — {day.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture)}", markdown);
 
     /// <summary>Writes a day's Markdown to Documents\PoVoiceHud and opens it.</summary>
     private async Task ExportAsync(DateOnly day, string markdown)
@@ -342,13 +391,15 @@ public partial class App : Application
         {
             // One call to the model while the models load: a key refused or a deployment gone since last time sends the user to Settings.
             // A service that is only unreachable does not: transcription still works, and the header says why checks are paused.
-            var key = CredentialStore.Read(CredentialStore.FoundryKey);
-            var connection = FoundryClient.IsReady(settings.FoundryEndpoint, key is not null)
-                ? Connection.TestAsync(new FoundryClient(Http, new Uri(settings.FoundryEndpoint!), key), CancellationToken.None)
+            // In local mode that is the local model; with Azure first, Azure (the fallback was checked when it was applied).
+            var connection = ServiceCollectionExtensions.Primary(settings, Http) is { } primary
+                ? Connection.TestAsync(primary, CancellationToken.None)
                 : Task.FromResult<FactCheckUnavailableException?>(new(Connection.NotSetUp) { NeedsSetup = true });
 
             Status("Checking models…");
-            var models = await ModelStore.EnsureAsync(new Progress<double>(p => Status($"Downloading models… {p:P0}")), CancellationToken.None);
+            var whisper = WhisperModels.Find(settings.WhisperModel);
+            var models = await ModelStore.EnsureAsync(whisper.Id, settings.SeparateSpeakers,
+                new Progress<double>(p => Status($"Downloading Whisper {whisper.Id}… {p:P0}")), CancellationToken.None);
 
             // The code repositories, if any: a URL is cloned (the first time, which can take a while) or refreshed; a folder is read where it is.
             var repos = new List<(string Location, string Root)>();
@@ -393,7 +444,8 @@ public partial class App : Application
             {
                 viewModel.AddTranscript(line);
                 _heardSinceSummary++;
-                Sessions.Append(new SessionEntry { At = DateTimeOffset.Now, Source = line.Source.ToString(), Heard = line.Text });
+                _meetingStart ??= line.At;
+                Sessions.Append(new SessionEntry { At = DateTimeOffset.Now, Source = line.Source.ToString(), Voice = line.Voice > 0 ? line.Voice : null, Heard = line.Text });
             });
             _ = Drain(pipeline.Checking, c => viewModel.MarkChecking(c.Line, c.Busy));
             var code = container.GetRequiredService<CodeRepositories>().All;
@@ -425,8 +477,9 @@ public partial class App : Application
                 });
             });
             pipeline.Start();
-            _log.LogInformation("Listening: {Model} at {Host}, Wikipedia {LookUp}, repositories {Files}, screen {Screen}", FoundryClient.Model,
-                Uri.TryCreate(settings.FoundryEndpoint, UriKind.Absolute, out var host) ? host.Host : "none", settings.LookUpClaims ? "on" : "off",
+            _log.LogInformation("Listening: {Model}, Whisper {Whisper} on the {Runtime}, voices {Voices}, Wikipedia {LookUp}, repositories {Files}, screen {Screen}",
+                ServiceCollectionExtensions.Describe(settings), whisper.Id, WhisperTranscriber.Runtime, pipeline.Voices is null ? "not told apart" : "told apart",
+                settings.LookUpClaims ? "on" : "off",
                 code.Count == 0 ? "none" : string.Join(", ", code.Select(c => $"{c.Name} ({c.Index.Symbols.Count} names)")), pipeline.Screen is null ? "off" : "watched");
             // After the audio's own "Listening", so it is not overwritten straight away; waiting for a call says so instead.
             if (repoWarning is not null) _ = Task.Delay(1500).ContinueWith(_ => Status(repoWarning), TaskScheduler.Default);
@@ -460,7 +513,8 @@ public partial class App : Application
         if (_pipeline is { } pipeline && CredentialStore.Read(CredentialStore.RepoToken) == _repoToken && settings with
             {
                 FoundryEndpoint = old.FoundryEndpoint, LookUpClaims = old.LookUpClaims, Sounds = old.Sounds, StartWithWindows = old.StartWithWindows,
-                CueVolume = old.CueVolume, CallsOnly = old.CallsOnly, WatchScreen = old.WatchScreen,
+                CueVolume = old.CueVolume, CallsOnly = old.CallsOnly, WatchScreen = old.WatchScreen, ModelMode = old.ModelMode,
+                LocalEndpoint = old.LocalEndpoint, LocalModel = old.LocalModel, OfferToShare = old.OfferToShare, UseGpu = old.UseGpu,
             } == old)
         {
             pipeline.Checker = ServiceCollectionExtensions.CreateChecker(settings, Http, Stats);
@@ -536,8 +590,10 @@ public partial class App : Application
         var environment = string.Join("\n",
             $"PoVoiceHud {Version} ({(IsInstalled() ? "installed" : "not installed: run from a build folder")})",
             $"Windows {Environment.OSVersion.Version} · {RuntimeInformation.FrameworkDescription} · {Environment.ProcessorCount} logical cores",
-            $"Audio: microphone and call · {FoundryClient.Model} at {(Uri.TryCreate(settings.FoundryEndpoint, UriKind.Absolute, out var endpoint) ? endpoint.Host : "none")}" +
+            $"Audio: microphone and call · model: {settings.ModelMode}, {ServiceCollectionExtensions.Describe(settings)}" +
             $" · key stored: {(CredentialStore.Read(CredentialStore.FoundryKey) is null ? "no" : "yes")}",
+            $"Whisper: {settings.WhisperModel} on the {WhisperTranscriber.Runtime} (graphics card {(settings.UseGpu ? "allowed" : "off")}) · voices told apart: {(settings.SeparateSpeakers ? "on" : "off")}" +
+            $" · share webhook: {(Webhook() is { } hook ? SummaryShare.NameOf(hook) : "none")}",
             $"Wikipedia: {(settings.LookUpClaims ? "on" : "off")} · repository: {(settings.Repository is null ? "none" : RepoSource.IsRemote(settings.Repository) ? "URL" : "folder")}" +
             $" · repository token stored: {(CredentialStore.Read(CredentialStore.RepoToken) is null ? "no" : "yes")} · start with Windows: {(settings.StartWithWindows ? "on" : "off")}" +
             $" · update feed: {(settings.UpdateFeed is null ? "none" : "set")}",
@@ -583,7 +639,8 @@ public partial class App : Application
                 ApplyFeedback(s);
                 _ = ApplyAsync(s);
             },
-            connect: (endpoint, key) => new FoundryClient(Http, endpoint, key)) { BuildStamp = BuildStamp };
+            connect: (endpoint, key) => new FoundryClient(Http, endpoint, key),
+            connectLocal: (endpoint, model) => new FoundryClient(Http, endpoint, null, timeout: TimeSpan.FromSeconds(90), localModel: model)) { BuildStamp = BuildStamp };
         page.Done += () => _window!.ViewModel.IsSettingsOpen = false;
         _settingsPage = page;
         _window!.AttachSettings(page, quit: () => _window!.Close());

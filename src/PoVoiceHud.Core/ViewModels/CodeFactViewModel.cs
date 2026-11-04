@@ -37,7 +37,7 @@ public sealed class CodeSourceViewModel(CodeSource source, Func<Uri, Task> openU
 /// One row of the Code facts page: a question about the code and its answer, or a statement about it and its verdict,
 /// with the files it rests on.
 /// </summary>
-public sealed partial class CodeFactViewModel(CodeFact fact, DateTimeOffset at, SourceHint source, Func<Uri, Task> openUri, SpeakerNames? names = null)
+public sealed partial class CodeFactViewModel(CodeFact fact, DateTimeOffset at, SourceHint source, Func<Uri, Task> openUri, SpeakerNames? names = null, int voice = 0)
     : ObservableObject
 {
     public CodeFact Fact => fact;
@@ -49,7 +49,8 @@ public sealed partial class CodeFactViewModel(CodeFact fact, DateTimeOffset at, 
     public string Text => fact.Text;
     public string Time { get; } = at.ToString("t", CultureInfo.CurrentCulture);
     public SourceHint Source => source;
-    public string Speaker => names?.Of(source) ?? source.Speaker();
+    public int Voice => voice;
+    public string Speaker => names?.Of(source, voice) ?? source.Speaker();
     /// <summary>The repository it was looked up in, shown when more than one is connected.</summary>
     public string Repository => fact.Repository;
     public double Confidence => fact.Confidence;

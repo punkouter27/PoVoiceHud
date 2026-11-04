@@ -2,7 +2,8 @@
     x:Class="PoVoiceHud.App.Views.SettingsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:PoVoiceHud.App.Views">
+    xmlns:local="using:PoVoiceHud.App.Views"
+    xmlns:vm="using:PoVoiceHud.Core.ViewModels">
     <!-- The Settings page: Apply and Cancel follow the form, and stay in view (the form scrolls) when the window is too short for both.
          A top-aligned grid sizes its star row to the content, but no taller than the room there is. -->
     <Grid RowSpacing="12" MaxWidth="532" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -16,15 +17,33 @@
 
                 <!-- First run, or an endpoint or key that stopped working: nothing is heard or checked until this is set -->
                 <InfoBar IsOpen="{x:Bind ViewModel.RequiresSetup, Mode=OneWay}" IsClosable="False" Severity="Informational" Title="Connect the fact checker"
-                         Message="PoVoiceHud checks claims with an Azure AI Foundry resource that has a gpt-4.1-mini deployment. The microphone stays off until it is connected." />
+                         Message="PoVoiceHud checks claims with an Azure AI Foundry resource that has a gpt-4.1-mini deployment, or with a model on this PC (Ollama, Foundry Local, LM Studio). The microphone stays off until one is connected." />
 
-                <!-- 1. Where the claims are checked: an Azure AI Foundry resource and its key. The model is built in. -->
-                <TextBox Header="Azure AI Foundry endpoint" Text="{x:Bind ViewModel.Endpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         PlaceholderText="https://&lt;resource&gt;.services.ai.azure.com" />
-                <PasswordBox Header="Key" Password="{x:Bind ViewModel.Key, Mode=TwoWay}"
-                             PlaceholderText="{x:Bind local:SettingsView.KeyPlaceholder(ViewModel.HasKey), Mode=OneWay}" />
-                <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
-                           Text="Claims are checked by gpt-4.1-mini, so the resource needs a deployment of that name. Apply checks the connection first. The key is kept in Windows Credential Manager." />
+                <!-- 1. Where the claims are checked: an Azure AI Foundry resource and its key, a local model, or Azure falling back to the local one -->
+                <ComboBox Header="Where claims are checked" ItemsSource="{x:Bind vm:SettingsViewModel.ModelModes}" HorizontalAlignment="Stretch"
+                          SelectedIndex="{x:Bind ViewModel.ModelMode, Mode=TwoWay}" />
+                <StackPanel Spacing="10" Visibility="{x:Bind ViewModel.UsesAzure, Mode=OneWay}">
+                    <TextBox Header="Azure AI Foundry endpoint" Text="{x:Bind ViewModel.Endpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="https://&lt;resource&gt;.services.ai.azure.com" />
+                    <PasswordBox Header="Key" Password="{x:Bind ViewModel.Key, Mode=TwoWay}"
+                                 PlaceholderText="{x:Bind local:SettingsView.KeyPlaceholder(ViewModel.HasKey), Mode=OneWay}" />
+                    <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
+                               Text="Claims are checked by gpt-4.1-mini, so the resource needs a deployment of that name. Apply checks the connection first. The key is kept in Windows Credential Manager." />
+                </StackPanel>
+                <StackPanel Spacing="10" Visibility="{x:Bind ViewModel.UsesLocal, Mode=OneWay}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*" />
+                            <ColumnDefinition Width="2*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Header="Local model server" Text="{x:Bind ViewModel.LocalEndpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="http://localhost:11434/v1" />
+                        <TextBox Grid.Column="1" Header="Model" Text="{x:Bind ViewModel.LocalModel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="qwen2.5:7b" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
+                               Text="Any OpenAI-compatible server: Ollama (http://localhost:11434/v1), Foundry Local or LM Studio. A model of 7 billion parameters or more judges claims well; it must be able to reply in a JSON schema. A local model is slower than Azure, and its knowledge ends where its training did. Apply asks it once first." />
+                </StackPanel>
 
                 <!-- 2. Optional: code repositories, so claims about the code are checked against their files; one per line -->
                 <TextBox Header="Code repositories (optional, one per line)" Text="{x:Bind ViewModel.Repository, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0"
@@ -34,7 +53,28 @@
                 <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
                            Text="A claim that names a file or class in one is checked against that code. Up to three matching files (the first 6,000 characters of each) go to the model with the claim. A URL is cloned to this PC and refreshed at each start; a private one needs a GitHub or Azure DevOps personal access token with read access to code (one token for all)." />
 
-                <!-- 3. The switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
+                <!-- 3. Transcription: which Whisper model, on which processor, and the call's voices told apart -->
+                <ComboBox Header="Transcription" ItemsSource="{x:Bind vm:SettingsViewModel.WhisperModelNames}" HorizontalAlignment="Stretch" Margin="0,4,0,0"
+                          SelectedIndex="{x:Bind ViewModel.WhisperModel, Mode=TwoWay}"
+                          ToolTipService.ToolTip="Whisper runs on this PC. A bigger model hears names and numbers better and takes longer per sentence; it is downloaded once, when applied." />
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ToggleSwitch Header="Use the graphics card" IsOn="{x:Bind ViewModel.UseGpu, Mode=TwoWay}" MinWidth="0"
+                                  ToolTipService.ToolTip="Runs Whisper on the graphics card through Vulkan (NVIDIA, AMD or Intel), several times faster; the CPU is used when there is none. Takes effect at the next start." />
+                    <ToggleSwitch Grid.Column="1" Header="Tell voices apart" IsOn="{x:Bind ViewModel.SeparateSpeakers, Mode=TwoWay}" MinWidth="0"
+                                  ToolTipService.ToolTip="Each voice on the call gets its own name: Them, Them 2, Them 3. Type names under Live as a list (Alex, Sam) to name them in the order they spoke. A speaker model (26 MB) runs on this PC; no audio leaves it." />
+                </Grid>
+
+                <!-- 4. Sharing a meeting's summary: a chat channel's incoming webhook, or an email draft without one -->
+                <PasswordBox Header="Chat webhook for meeting summaries (optional)" Password="{x:Bind ViewModel.ShareWebhook, Mode=TwoWay}" Margin="0,4,0,0"
+                             PlaceholderText="{x:Bind local:SettingsView.WebhookPlaceholder(ViewModel.HasShareWebhook), Mode=OneWay}" />
+                <ToggleSwitch Header="Offer to share when a meeting ends" IsOn="{x:Bind ViewModel.OfferToShare, Mode=TwoWay}" MinWidth="0"
+                              ToolTipService.ToolTip="When you mute after a meeting, or the call ends, that meeting is summed up and the window offers to post it to the webhook (Slack, a Teams workflow, Discord) or, without one, to email it. Nothing is sent until you press the button." />
+
+                <!-- 5. The switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
                 <Grid ColumnSpacing="12" RowSpacing="2" Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -62,7 +102,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- 4. What Apply found, then the buttons: always in view, however short the window -->
+        <!-- 6. What Apply found, then the buttons: always in view, however short the window -->
         <Grid Grid.Row="1" ColumnSpacing="8" RowSpacing="6" Padding="4,0,12,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />

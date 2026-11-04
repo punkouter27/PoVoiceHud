@@ -118,7 +118,18 @@
         <!-- The pages, in one column that keeps a readable width when the window is wide -->
         <Grid Grid.Row="1" x:Name="Panel" Background="{ThemeResource HudScrimBrush}" Padding="8,4,8,8"
               Visibility="{x:Bind local:MainWindow.Not(ViewModel.IsCompact), Mode=OneWay}">
-            <Grid MaxWidth="900" RowSpacing="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <!-- A meeting just ended: its summary can be posted to the chat webhook (or emailed). Nothing is sent until the button is pressed. -->
+            <InfoBar MaxWidth="900" IsOpen="{x:Bind ViewModel.HasShareOffer, Mode=OneWay}" Severity="Success" Title="Meeting summary"
+                     Message="{x:Bind ViewModel.ShareOffer, Mode=OneWay}" CloseButtonCommand="{x:Bind ViewModel.DismissShareCommand}" Margin="0,0,0,6">
+                <InfoBar.ActionButton>
+                    <Button Content="{x:Bind ViewModel.ShareAction, Mode=OneWay}" Command="{x:Bind ViewModel.ShareCommand}" Style="{StaticResource AccentButtonStyle}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+            <Grid Grid.Row="1" MaxWidth="900" RowSpacing="6">
                 <Grid.Resources>
                     <!-- One row of Facts or Screen facts: a claim found correct or incorrect, its reason and its source -->
                     <DataTemplate x:Key="FactRow" x:DataType="vm:FactViewModel">
@@ -197,7 +208,9 @@
                             <Flyout Placement="BottomEdgeAlignedRight">
                                 <StackPanel Spacing="8" Width="220">
                                     <TextBox Header="You (the microphone)" Text="{x:Bind ViewModel.Names.You, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBox Header="Them (the call)" Text="{x:Bind ViewModel.Names.Them, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Header="Them (the call)" Text="{x:Bind ViewModel.Names.Them, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             PlaceholderText="Alex, Sam (in the order they spoke)"
+                                             ToolTipService.ToolTip="With Tell voices apart on, name each voice in the order it was first heard: the first is Them, the second Them 2" />
                                 </StackPanel>
                             </Flyout>
                         </DropDownButton.Flyout>
@@ -357,6 +370,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <ComboBox ItemsSource="{x:Bind ViewModel.History.Days, Mode=OneWay}" SelectedIndex="{x:Bind ViewModel.History.DayIndex, Mode=TwoWay}"
                                   MinWidth="140" PlaceholderText="No history yet" AutomationProperties.Name="Day" />
@@ -374,6 +388,13 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <FontIcon Glyph="&#xEDE1;" FontSize="13" />
                                 <TextBlock Text="Export" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="4" Command="{x:Bind ViewModel.History.ShareCommand, Mode=OneWay}" Padding="10,4"
+                                ToolTipService.ToolTip="Post this day's summary to the chat webhook set in Settings (Slack, Teams, Discord), or without one open it as an email">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE72D;" FontSize="13" />
+                                <TextBlock Text="Share" />
                             </StackPanel>
                         </Button>
                     </Grid>

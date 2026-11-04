@@ -22,6 +22,8 @@ public sealed partial class SettingsView : UserControl
 
     public static string TokenPlaceholder(bool hasToken) => hasToken ? "•••••••• (stored — type to replace)" : "only for a private repository";
 
+    public static string WebhookPlaceholder(bool hasWebhook) => hasWebhook ? "•••••••• (stored — type to replace)" : "https://hooks.slack.com/services/…, a Teams workflow URL, or Discord's";
+
     /// <summary>A line that takes no room until there is something to say.</summary>
     public static Visibility Shown(string? text) => string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
 

@@ -11,6 +11,8 @@ public sealed record SessionEntry
     public DateTimeOffset At { get; init; }
     /// <summary>Who said it: "Mic" or "Teams" (<see cref="Audio.SourceHint"/>).</summary>
     public string? Source { get; init; }
+    /// <summary>Which of the call's voices, 1, 2…, when they were told apart (<see cref="TranscriptLine.Voice"/>).</summary>
+    public int? Voice { get; init; }
     public string? Heard { get; init; }
     /// <summary>What the screen showed from this time on, in the model's words.</summary>
     public string? Screen { get; init; }

@@ -71,6 +71,11 @@ public sealed partial class HudViewModel : ObservableObject
     [ObservableProperty] private string _filterText = "";
     /// <summary>Which of <see cref="FilterKinds"/> the lists are narrowed to.</summary>
     [ObservableProperty] private int _filterKind;
+    /// <summary>"Meeting summary ready (10:02–10:47)": a meeting just ended and its summary can be shared; "" for nothing to offer.</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasShareOffer))] private string _shareOffer = "";
+    /// <summary>What the offer's button does: "Post to Slack", or "Email it" without a webhook.</summary>
+    [ObservableProperty] private string _shareAction = "";
+    private Func<Task<string>>? _share;
 
     public HudViewModel(Func<Uri, Task> openUri)
     {
@@ -83,6 +88,36 @@ public sealed partial class HudViewModel : ObservableObject
             foreach (var fact in CodeFacts) fact.Renamed();
             foreach (var fact in ScreenFacts) fact.Renamed();
         };
+    }
+
+    public bool HasShareOffer => ShareOffer.Length > 0;
+
+    /// <summary>
+    /// Offers to share a meeting's summary: <paramref name="share"/> runs only when the button is pressed, and says what
+    /// happened ("Posted to Slack"). A newer offer replaces an older one.
+    /// </summary>
+    public void OfferShare(string offer, string action, Func<Task<string>> share)
+    {
+        _share = share;
+        ShareAction = action;
+        ShareOffer = offer;
+    }
+
+    /// <summary>The offer's button: shares, then says how it went in the header.</summary>
+    [RelayCommand]
+    private async Task Share()
+    {
+        if (_share is not { } share) return;
+        DismissShare();
+        SetStatus(await share());
+    }
+
+    /// <summary>Not now: the summary stays on the History page, where it can still be shared.</summary>
+    [RelayCommand]
+    private void DismissShare()
+    {
+        _share = null;
+        ShareOffer = "";
     }
 
     public bool ShowsSettings => IsSettingsOpen || NeedsSetup;
@@ -214,8 +249,8 @@ public sealed partial class HudViewModel : ObservableObject
         Tally(verdict.Verdict);
         if (verdict.Verdict != Verdict.Unverified)
         {
-            if (verdict.OnScreen) AddFact(ScreenFacts, verdict, line.At, line.Source);
-            else AddFact(Facts, verdict, line.At, line.Source);
+            if (verdict.OnScreen) AddFact(ScreenFacts, verdict, line);
+            else AddFact(Facts, verdict, line);
             Headline = $"{verdict.Verdict.Emoji()} {verdict.Claim}";   // "can't tell" stays a note on its line
         }
         Arrived?.Invoke(CueFor(verdict.Verdict));
@@ -235,7 +270,7 @@ public sealed partial class HudViewModel : ObservableObject
             Arrived?.Invoke(Cue.Unverified);
             return;
         }
-        CodeFacts.Insert(0, new CodeFactViewModel(fact, line.At, line.Source, _openUri, Names));
+        CodeFacts.Insert(0, new CodeFactViewModel(fact, line.At, line.Source, _openUri, Names, line.Voice));
         while (CodeFacts.Count > FactsSize) CodeFacts.RemoveAt(CodeFacts.Count - 1);
         Headline = $"{(fact.Verdict is { } v ? v.Emoji() : "💬")} {fact.Topic}";
         OnPropertyChanged(nameof(HasCodeFacts));
@@ -266,8 +301,9 @@ public sealed partial class HudViewModel : ObservableObject
         _ => ShownFacts.Select(f => f.CopyLine),
     });
 
-    private void AddFact(ObservableCollection<FactViewModel> facts, Insight verdict, DateTimeOffset at, SourceHint source)
+    private void AddFact(ObservableCollection<FactViewModel> facts, Insight verdict, TranscriptLine line)
     {
+        var at = line.At;
         // The same claim said again is one row with a count, moved to the top.
         if (facts.FirstOrDefault(f => f.IsSameAs(verdict) && f.Verdict == verdict.Verdict) is { } earlier)
         {
@@ -277,7 +313,7 @@ public sealed partial class HudViewModel : ObservableObject
         }
         else
         {
-            facts.Insert(0, new FactViewModel(verdict, at, source, _openUri, Names));
+            facts.Insert(0, new FactViewModel(verdict, at, line.Source, _openUri, Names, line.Voice));
             while (facts.Count > FactsSize) facts.RemoveAt(facts.Count - 1);
         }
         OnPropertyChanged(nameof(HasFacts));
@@ -306,9 +342,9 @@ public sealed partial class HudViewModel : ObservableObject
     /// <summary>Brings the shown lists in line with the facts and the filter, moving rows rather than rebuilding the lists.</summary>
     private void Refilter()
     {
-        Mirror(ShownFacts, [.. Facts.Where(f => Matches(f.Title + " " + f.Reason, f.Verdict, f.Source))]);
-        Mirror(ShownCodeFacts, [.. CodeFacts.Where(f => Matches(f.Topic + " " + f.Text + " " + f.Repository, f.Verdict, f.Source))]);
-        Mirror(ShownScreenFacts, [.. ScreenFacts.Where(f => Matches(f.Title + " " + f.Reason, f.Verdict, f.Source))]);
+        Mirror(ShownFacts, [.. Facts.Where(f => Matches(f.Title + " " + f.Reason, f.Verdict, f.Source, f.Voice))]);
+        Mirror(ShownCodeFacts, [.. CodeFacts.Where(f => Matches(f.Topic + " " + f.Text + " " + f.Repository, f.Verdict, f.Source, f.Voice))]);
+        Mirror(ShownScreenFacts, [.. ScreenFacts.Where(f => Matches(f.Title + " " + f.Reason, f.Verdict, f.Source, f.Voice))]);
         OnPropertyChanged(nameof(NoFacts));
         OnPropertyChanged(nameof(NoCodeFacts));
         OnPropertyChanged(nameof(NoScreenFacts));
@@ -319,9 +355,9 @@ public sealed partial class HudViewModel : ObservableObject
         OnPropertyChanged(nameof(CanCopy));
     }
 
-    private bool Matches(string text, Verdict? verdict, SourceHint source) =>
+    private bool Matches(string text, Verdict? verdict, SourceHint source, int voice) =>
         (FilterText.Trim() is var search && (search.Length == 0 || text.Contains(search, StringComparison.OrdinalIgnoreCase)
-            || Names.Of(source).Contains(search, StringComparison.OrdinalIgnoreCase)))
+            || Names.Of(source, voice).Contains(search, StringComparison.OrdinalIgnoreCase)))
         && FilterKind switch
         {
             1 => verdict == Verdict.Supported,

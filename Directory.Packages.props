@@ -12,6 +12,8 @@
     <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.30.0" />
     <PackageVersion Include="Whisper.net" Version="1.9.1" />
     <PackageVersion Include="Whisper.net.Runtime" Version="1.9.1" />
+    <!-- Whisper on the graphics card, any vendor with a Vulkan driver; the CPU runtime above is the fallback -->
+    <PackageVersion Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
     <!-- Helpers -->
     <PackageVersion Include="Polly.Core" Version="8.7.0" />
     <!-- The optional code repository: clone, fetch and index (LibGit2Sharp), and matching spoken names to files (FuzzySharp) -->

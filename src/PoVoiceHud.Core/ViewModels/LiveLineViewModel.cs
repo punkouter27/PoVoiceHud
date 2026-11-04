@@ -19,7 +19,7 @@ public sealed partial class LiveLineViewModel(TranscriptLine line, SpeakerNames?
     /// <summary>The clock time it was said, in the user's short time format (as on the Facts page).</summary>
     public string Stamp => line.At.ToString("t", CultureInfo.CurrentCulture);
     /// <summary>"You:" (the microphone) or "Them:" (the call), or the names given to them.</summary>
-    public string Speaker => $"{names?.Of(line.Source) ?? line.Source.Speaker()}:";
+    public string Speaker => $"{names?.Of(line.Source, line.Voice) ?? line.Source.Speaker()}:";
 
     /// <summary>The sides were renamed.</summary>
     internal void Renamed() => OnPropertyChanged(nameof(Speaker));

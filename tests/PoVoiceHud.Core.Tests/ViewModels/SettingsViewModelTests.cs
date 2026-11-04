@@ -149,6 +149,42 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public async Task A_local_model_needs_no_Azure_key_is_asked_once_and_the_webhook_is_stored_as_a_secret()
+    {
+        var asked = new List<(Uri Server, string Model)>();
+        var vm = new SettingsViewModel(new Settings(), name => _secrets.GetValueOrDefault(name), (name, value) => _secrets[name] = value, s => _saved = s,
+            connect: (_, _) => throw new InvalidOperationException("Azure is not used in local mode"),
+            connectLocal: (server, model) =>
+            {
+                asked.Add((server, model));
+                return new StubModel(_modelReply);
+            });
+        vm.RequireSetup(null);
+        vm.ModelMode = (int)ModelMode.Local;
+        Assert.False(vm.UsesAzure);
+
+        vm.LocalEndpoint = "localhost:11434";
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.StartsWith("✗ The local model's address", vm.Message, StringComparison.Ordinal);
+
+        vm.LocalEndpoint = "http://localhost:11434/v1";
+        vm.LocalModel = "qwen2.5:7b";
+        vm.ShareWebhook = "http://hooks.slack.com/services/x";
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.StartsWith("✗ The webhook must be an https:// URL", vm.Message, StringComparison.Ordinal);
+
+        vm.ShareWebhook = "https://hooks.slack.com/services/T0/B0/x";
+        vm.WhisperModel = 1;
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.Equal([(new Uri("http://localhost:11434/v1"), "qwen2.5:7b")], asked);
+        Assert.Equal((ModelMode.Local, "qwen2.5:7b", "small.en"), (_saved!.ModelMode, _saved.LocalModel, _saved.WhisperModel));
+        Assert.Equal("https://hooks.slack.com/services/T0/B0/x", _secrets[CredentialStore.ShareWebhook]);
+        Assert.Equal(("", true), (vm.ShareWebhook, vm.HasShareWebhook));
+        Assert.Contains("✓ Summaries can be posted to Slack.", vm.Message, StringComparison.Ordinal);
+        Assert.False(_secrets.ContainsKey(CredentialStore.FoundryKey));
+    }
+
+    [Fact]
     public async Task Cancel_puts_back_what_was_applied_and_setup_cannot_be_cancelled_until_it_works()
     {
         var vm = Build(new Settings { FoundryEndpoint = Endpoint });

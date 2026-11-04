@@ -6,6 +6,13 @@ public interface ILanguageModel
     Task<string> CompleteAsync(string system, string user, CancellationToken ct);
 }
 
+/// <summary>A chat model as the app builds them: text, pictures, and a name to show.</summary>
+public interface IChatModel : ILanguageModel, IVisionModel
+{
+    /// <summary>"gpt-4.1-mini", or the local model's name.</summary>
+    string Name { get; }
+}
+
 /// <summary>A model that can also be shown a picture.</summary>
 public interface IVisionModel
 {

@@ -21,6 +21,8 @@ public sealed class ContentFilteredException : Exception
 /// Chat completions on an Azure AI Foundry resource: the resource root (https://&lt;resource&gt;.services.ai.azure.com) gets
 /// /models/chat/completions?api-version=… appended and the key goes in the api-key header. The model is fixed, and the
 /// reply is held to the verdict schema. Each attempt has its own time limit and transient failures are retried.
+/// With <paramref name="localModel"/>, the endpoint is an OpenAI-compatible server instead (Ollama, Foundry Local, LM Studio:
+/// http://localhost:11434/v1 gets /chat/completions), asked for that model, with any key as a bearer token.
 /// </summary>
 /// <param name="responseFormat">
 /// The JSON schema the reply is held to, as JSON: the fact checker's verdict unless another is given
@@ -28,8 +30,9 @@ public sealed class ContentFilteredException : Exception
 /// </param>
 /// <param name="stats">Where each call's time, tokens, retries and failures are counted, if anywhere.</param>
 /// <param name="maxTokens">The longest reply: a verdict needs 300; a meeting's summary more.</param>
+/// <param name="localModel">The model's name on an OpenAI-compatible server, such as qwen2.5:7b; null for Azure.</param>
 public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey, ResiliencePipeline? retry = null, TimeSpan? timeout = null,
-    string? responseFormat = null, ModelStats? stats = null, int maxTokens = 300) : ILanguageModel, IVisionModel
+    string? responseFormat = null, ModelStats? stats = null, int maxTokens = 300, string? localModel = null) : IChatModel
 {
     /// <summary>
     /// ~1–1.5 s per verdict on a GlobalStandard deployment, and it honours the JSON schema natively. The resource must have
@@ -57,6 +60,12 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
           "additionalProperties": false}}}
         """;
 
+    /// <summary>"gpt-4.1-mini", or the local model's name.</summary>
+    public string Name => localModel ?? Model;
+
+    /// <summary>On this PC or network rather than Azure.</summary>
+    public bool IsLocal => localModel is not null;
+
     private readonly ResiliencePipeline _retry = retry ?? Resilience.Default;
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(8);
     private readonly string _format = responseFormat ?? VerdictFormat;
@@ -69,6 +78,16 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
 
     public static Uri Resolve(Uri endpoint) =>
         endpoint.AbsolutePath is "" or "/" ? new Uri(endpoint, $"/models/chat/completions?api-version={ApiVersion}") : endpoint;
+
+    /// <summary>An OpenAI-compatible server's chat URL: http://localhost:11434/v1 → …/v1/chat/completions (a full URL is kept).</summary>
+    public static Uri ResolveLocal(Uri endpoint) =>
+        endpoint.AbsolutePath.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase)
+            ? endpoint
+            : new Uri(endpoint.GetLeftPart(UriPartial.Path).TrimEnd('/') + (endpoint.AbsolutePath is "" or "/" ? "/v1" : "") + "/chat/completions");
+
+    /// <summary>An http or https URL: a local server usually has no certificate.</summary>
+    public static bool IsValidLocalEndpoint(string? endpoint) =>
+        Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
 
     /// <summary>Throws HttpRequestException on transport/HTTP failure and TimeoutException when an attempt gets no reply in time.</summary>
     public Task<string> CompleteAsync(string system, string user, CancellationToken ct) => SendAsync(system, user, ct);
@@ -83,7 +102,7 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
     {
         var body = new JsonObject
         {
-            ["model"] = Model,
+            ["model"] = Name,
             ["messages"] = new JsonArray(
                 new JsonObject { ["role"] = "system", ["content"] = system },
                 new JsonObject { ["role"] = "user", ["content"] = user }),
@@ -102,8 +121,15 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
                 limit.CancelAfter(_timeout);
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, Resolve(endpoint)) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-                    if (!string.IsNullOrEmpty(apiKey)) request.Headers.Add("api-key", apiKey);
+                    using var request = new HttpRequestMessage(HttpMethod.Post, IsLocal ? ResolveLocal(endpoint) : Resolve(endpoint))
+                    {
+                        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+                    };
+                    if (!string.IsNullOrEmpty(apiKey))
+                    {
+                        if (IsLocal) request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                        else request.Headers.Add("api-key", apiKey);
+                    }
                     using var response = await http.SendAsync(request, limit.Token);
                     return await ReadAsync(response, limit.Token);
                 }
@@ -112,7 +138,7 @@ public sealed class FoundryClient(HttpClient http, Uri endpoint, string? apiKey,
                     throw new TimeoutException($"No reply from {endpoint.Host} within {_timeout.TotalSeconds:0} s.");
                 }
             }, ct);
-            stats?.Record(clock.Elapsed, tokens);
+            stats?.Record(clock.Elapsed, tokens, IsLocal);
             return text;
         }
         catch (Exception e) when (e is HttpRequestException or TimeoutException)

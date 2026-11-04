@@ -16,15 +16,20 @@ public sealed class ModelStats
     private long _tokens;
     private double _totalMs;
     private double _lastMs;
+    private int _local;
 
     public int Calls { get { lock (_gate) return _calls; } }
 
-    /// <summary>A call that came back, with its time and tokens (0 when the reply did not say).</summary>
-    public void Record(TimeSpan took, int tokens)
+    /// <summary>What the model clients switch between Azure and the local model by: one for the app, so all switch at once.</summary>
+    public FactCheck.FallbackCircuit Fallback { get; } = new();
+
+    /// <summary>A call that came back, with its time and tokens (0 when the reply did not say), and whether the local model answered it.</summary>
+    public void Record(TimeSpan took, int tokens, bool local = false)
     {
         lock (_gate)
         {
             _calls++;
+            if (local) _local++;
             _tokens += tokens;
             _totalMs += took.TotalMilliseconds;
             _lastMs = took.TotalMilliseconds;
@@ -58,6 +63,7 @@ public sealed class ModelStats
                     string.Format(culture, "{0:0.0} s average (last {1:0.0} s)", _calls == 0 ? 0 : _totalMs / _calls / 1000, _lastMs / 1000),
                     string.Format(culture, "{0:N0} tokens", _tokens),
                 };
+                if (_local > 0 && _local < _calls) parts.Add($"{_local} by the local model");
                 if (_retries > 0) parts.Add($"{_retries} {(_retries == 1 ? "retry" : "retries")}");
                 if (_failures > 0) parts.Add($"{_failures} failed");
                 return string.Join(" · ", parts);

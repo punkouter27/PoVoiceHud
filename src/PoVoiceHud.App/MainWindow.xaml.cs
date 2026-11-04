@@ -294,17 +294,18 @@ public sealed partial class MainWindow : WindowEx
         var now = DateTimeOffset.Now;
         ViewModel.SetStatus("Listening to you and the call");
         ViewModel.HasRepository = true;
-        (SourceHint Source, int At, string Text, Core.Providers.Verdict? Verdict, string Reason)[] said =
+        // Two voices on the call, told apart: "Them" and "Them 2".
+        (SourceHint Source, int Voice, int At, string Text, Core.Providers.Verdict? Verdict, string Reason)[] said =
         [
-            (SourceHint.Teams, 241, "Okay, let's get started with the roadmap review.", null, ""),
-            (SourceHint.Mic, 246, "The Eiffel Tower was completed in 1889.", Core.Providers.Verdict.Supported, "It was finished in March 1889 for the Exposition Universelle."),
-            (SourceHint.Teams, 250, "Right, and I think we should keep that example in the deck.", null, ""),
-            (SourceHint.Mic, 255, "Python was created by Dennis Ritchie.", Core.Providers.Verdict.Contradicted, "Guido van Rossum created Python; Dennis Ritchie created C."),
-            (SourceHint.Teams, 262, "Octopuses dream in colour, apparently.", Core.Providers.Verdict.Unverified, "They change colour in their sleep, but whether they dream is unknown."),
+            (SourceHint.Teams, 1, 241, "Okay, let's get started with the roadmap review.", null, ""),
+            (SourceHint.Mic, 0, 246, "The Eiffel Tower was completed in 1889.", Core.Providers.Verdict.Supported, "It was finished in March 1889 for the Exposition Universelle."),
+            (SourceHint.Teams, 2, 250, "Right, and I think we should keep that example in the deck.", null, ""),
+            (SourceHint.Mic, 0, 255, "Python was created by Dennis Ritchie.", Core.Providers.Verdict.Contradicted, "Guido van Rossum created Python; Dennis Ritchie created C."),
+            (SourceHint.Teams, 1, 262, "Octopuses dream in colour, apparently.", Core.Providers.Verdict.Unverified, "They change colour in their sleep, but whether they dream is unknown."),
         ];
-        foreach (var (source, at, text, verdict, reason) in said)
+        foreach (var (source, voice, at, text, verdict, reason) in said)
         {
-            var line = new TranscriptLine(source, now.AddSeconds(at - 270), text);
+            var line = new TranscriptLine(source, now.AddSeconds(at - 270), text, voice);
             ViewModel.AddTranscript(line);
             if (verdict is not { } v) continue;
             ViewModel.MarkChecking(line, busy: true);

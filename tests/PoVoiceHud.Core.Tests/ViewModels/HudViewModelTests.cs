@@ -229,6 +229,47 @@ public class HudViewModelTests
     }
 
     [Fact]
+    public void The_voices_on_the_call_are_named_in_the_order_they_spoke_and_filter_by_their_names()
+    {
+        var first = Line("The Moon is bigger than the Earth", 1, SourceHint.Teams) with { Voice = 1 };
+        var second = Line("Octopuses have three hearts", 2, SourceHint.Teams) with { Voice = 2 };
+        _vm.AddTranscript(first);
+        _vm.AddTranscript(second);
+        _vm.Push(new Checked(second, Judged("Octopuses have three hearts", Verdict.Supported)));
+        Assert.Equal(("Them:", "Them 2:", "Them 2"), (_vm.Live[0].Speaker, _vm.Live[1].Speaker, _vm.Facts[0].Speaker));
+
+        _vm.Names.Them = "Alex, Sam";
+        Assert.Equal(("Alex:", "Sam:", "Sam"), (_vm.Live[0].Speaker, _vm.Live[1].Speaker, _vm.Facts[0].Speaker));
+        _vm.FilterText = "sam";
+        Assert.Single(_vm.ShownFacts);
+        _vm.FilterText = "alex";
+        Assert.Empty(_vm.ShownFacts);
+        Assert.Equal("Them 3", Core.ViewModels.SpeakerNames.OfCall("Alex, Sam", 3));
+        Assert.Equal("Alex, Sam", Core.ViewModels.SpeakerNames.OfCall("Alex, Sam", 0));   // not told apart: the side as named
+    }
+
+    [Fact]
+    public async Task A_meeting_summary_is_shared_only_when_the_button_is_pressed()
+    {
+        var shared = 0;
+        _vm.OfferShare("Summary of the meeting from 10:02 is ready.", "Post to Slack", () =>
+        {
+            shared++;
+            return Task.FromResult("Posted the summary to Slack");
+        });
+        Assert.True(_vm.HasShareOffer);
+        Assert.Equal(0, shared);
+
+        await _vm.ShareCommand.ExecuteAsync(null);
+        Assert.Equal((1, false, "Posted the summary to Slack"), (shared, _vm.HasShareOffer, _vm.StatusText));
+
+        _vm.OfferShare("Again", "Email it", () => Task.FromResult(""));
+        _vm.DismissShareCommand.Execute(null);
+        await _vm.ShareCommand.ExecuteAsync(null);   // nothing left to share
+        Assert.Equal((1, false), (shared, _vm.HasShareOffer));
+    }
+
+    [Fact]
     public void The_lists_filter_by_words_kind_or_speaker_and_the_header_follows_each_verdict()
     {
         var cues = new List<Cue>();

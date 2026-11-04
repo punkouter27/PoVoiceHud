@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using Microsoft.ML.OnnxRuntime;
 using PoVoiceHud.Core.Asr;
 using PoVoiceHud.Core.Audio;
 using PoVoiceHud.Core.Providers;
@@ -8,11 +9,15 @@ using PoVoiceHud.Core.Providers.FactCheck;
 using PoVoiceHud.Core.Repos;
 using PoVoiceHud.Core.Screen;
 using PoVoiceHud.Core.Vad;
+using PoVoiceHud.Core.Voices;
 
 namespace PoVoiceHud.Core;
 
-/// <summary>One sentence heard: who said it, the clock time they started saying it, and what was said.</summary>
-public sealed record TranscriptLine(SourceHint Source, DateTimeOffset At, string Text);
+/// <summary>
+/// One sentence heard: who said it, the clock time they started saying it, and what was said. <paramref name="Voice"/> tells
+/// the call's voices apart (1, 2…; 0 when they are not told apart or it could not tell).
+/// </summary>
+public sealed record TranscriptLine(SourceHint Source, DateTimeOffset At, string Text, int Voice = 0);
 
 /// <summary>The verdict on one transcript line.</summary>
 public sealed record Checked(TranscriptLine Line, Insight Verdict);
@@ -108,6 +113,9 @@ public sealed partial class HudPipeline : IDisposable
         }
     }
 
+    /// <summary>Tells the call's voices apart, run beside Whisper on each utterance from the call; null to call them all "Them".</summary>
+    public IVoiceTagger? Voices { get; init; }
+
     /// <summary>A line is queued for the fact checker (Busy) and done with it, with or without a verdict, or dropped by mute.</summary>
     public ChannelReader<(TranscriptLine Line, bool Busy)> Checking => _checking.Reader;
 
@@ -193,12 +201,17 @@ public sealed partial class HudPipeline : IDisposable
                 var generation = Volatile.Read(ref _generation);
                 try
                 {
+                    // Whose voice it is takes ~50 ms beside Whisper's ~100, so it costs no time.
+                    var voice = utterance.Source == SourceHint.Teams && Voices is { } voices
+                        ? Task.Run(() => voices.Identify(utterance.Samples, at), _cts.Token)
+                        : Task.FromResult(0);
                     var text = await _transcriber.TranscribeAsync(utterance.Samples, _cts.Token);
+                    var who = await VoiceOf(voice);
                     if (generation != Volatile.Read(ref _generation) || string.IsNullOrWhiteSpace(text)) continue;
                     // Whisper hands over everything said between two pauses; each sentence is its own line with its own verdict.
                     foreach (var sentence in Sentences(text))
                     {
-                        var line = new TranscriptLine(utterance.Source, at, sentence);
+                        var line = new TranscriptLine(utterance.Source, at, sentence, who);
                         _transcript.Writer.TryWrite(line);
                         // About the code (questions too) goes to the repository; any other claim to the fact checker.
                         var code = Code?.IsAbout(sentence, recent) == true;   // "…in it?" after "…our repo" is about the code too
@@ -221,6 +234,20 @@ public sealed partial class HudPipeline : IDisposable
         catch (OperationCanceledException)
         {
             // disposed
+        }
+    }
+
+    /// <summary>The voice, or 0 when telling it failed: a line without a voice is still a line.</summary>
+    private async Task<int> VoiceOf(Task<int> voice)
+    {
+        try
+        {
+            return await voice;
+        }
+        catch (Exception e) when (e is OnnxRuntimeException or InvalidOperationException or ArgumentException)
+        {
+            _log.LogWarning(e, "Telling the voice apart failed");
+            return 0;
         }
     }
 
