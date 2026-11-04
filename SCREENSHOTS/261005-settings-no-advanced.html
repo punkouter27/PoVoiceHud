@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoVoiceHud — settings without the Advanced section (2026-10-05)</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1b1b1f; --soft: #5c5f66; --line: #d9dbe0; --bg: #f6f7f9; --card: #ffffff; --mark: #c81e2d; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #ececf1; --soft: #a3a7b0; --line: #34363c; --bg: #17181b; --card: #212327; } }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h3 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  p.lead { color: var(--soft); margin: 0 0 20px; max-width: 80ch; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+  .side { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .side img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  ol { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: n; }
+  ol li { counter-increment: n; position: relative; padding: 0 0 8px 34px; }
+  ol li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+                  background: var(--mark); color: #fff; font-weight: 700; font-size: 13px; line-height: 22px; text-align: center; }
+  .note { color: var(--soft); font-size: 14px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Settings without the Advanced section</h1>
+  <p class="lead">The Advanced section is removed. What its switches were set to in the "before" picture is now simply how the app behaves.
+    "Before" is the picture you sent; "after" is a Debug build showing the settings with sample data.</p>
+  <div class="pair">
+    <section class="side">
+      <h3>Before</h3>
+      <img src="261005-settings-advanced-before.png" alt="The Advanced section open: mute hotkey, four switches, audio input and source switches">
+      <ol>
+        <li>The Advanced section (outlined), a long scrolling list.</li>
+        <li>Mute hotkey: Win+Shift+M.</li>
+        <li>Sound when a statement is contradicted: on.</li>
+        <li>Show the transcript line: on.</li>
+        <li>Keep a log of each session on this PC: on.</li>
+        <li>Filter chatter with local Ollama before the cloud model: on.</li>
+        <li>Audio input: Mic.</li>
+        <li>Source switches (Fact check on, and the repo sources below it).</li>
+      </ol>
+    </section>
+    <section class="side">
+      <h3>After</h3>
+      <img src="261005-settings-advanced-after.png" alt="Settings ending at Mode and Save, with no Advanced section">
+      <ol>
+        <li>Mode is the last choice. It decides the audio input and the sources, as it already did: Simple is mic + fact check, Repo is mic + call audio + the repo sources. Choosing Repo also shows the repository and the three Azure DevOps fields here.</li>
+        <li>Nothing else to set. Items 2 to 6 on the left are now fixed: Win+Shift+M (with the same fallbacks if it is taken), the tone, the transcript line, the session log and the Ollama filter are always on.</li>
+      </ol>
+      <p class="note">The endpoint is blanked in the picture because it names a private Azure resource.</p>
+    </section>
+  </div>
+</main>
+</body>
+</html>

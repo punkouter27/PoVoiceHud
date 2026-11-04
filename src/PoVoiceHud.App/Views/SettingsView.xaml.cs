@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using PoVoiceHud.Core.ViewModels;
+using PoVoiceHud.Core.Config;
 
 namespace PoVoiceHud.App.Views;
 
@@ -14,9 +14,6 @@ public sealed partial class SettingsView : UserControl
     }
 
     public SettingsViewModel ViewModel { get; }
-
-    /// <summary>Closes the app; set by the window.</summary>
-    public Action? Quit { get; set; }
 
     public static string KeyPlaceholder(bool hasKey) => hasKey ? "•••••••• (stored — type to replace)" : "not set";
 
@@ -36,6 +33,4 @@ public sealed partial class SettingsView : UserControl
     });
 
     private static Brush Theme(string key) => (Brush)Application.Current.Resources[key];
-
-    private void Quit_Click(object sender, RoutedEventArgs e) => Quit?.Invoke();
 }

@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:PoVoiceHud.App.Views"
-    xmlns:vm="using:PoVoiceHud.Core.ViewModels">
+    xmlns:config="using:PoVoiceHud.Core.Config">
     <!-- The Settings page: Apply and Cancel follow the form, and stay in view (the form scrolls) when the window is too short for both.
          A top-aligned grid sizes its star row to the content, but no taller than the room there is. -->
     <Grid RowSpacing="12" MaxWidth="532" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -20,7 +20,7 @@
                          Message="PoVoiceHud checks claims with an Azure AI Foundry resource that has a gpt-4.1-mini deployment, or with a model on this PC (Ollama, Foundry Local, LM Studio). The microphone stays off until one is connected." />
 
                 <!-- 1. Where the claims are checked: an Azure AI Foundry resource and its key, a local model, or Azure falling back to the local one -->
-                <ComboBox Header="Where claims are checked" ItemsSource="{x:Bind vm:SettingsViewModel.ModelModes}" HorizontalAlignment="Stretch"
+                <ComboBox Header="Where claims are checked" ItemsSource="{x:Bind config:SettingsViewModel.ModelModes}" HorizontalAlignment="Stretch"
                           SelectedIndex="{x:Bind ViewModel.ModelMode, Mode=TwoWay}" />
                 <StackPanel Spacing="10" Visibility="{x:Bind ViewModel.UsesAzure, Mode=OneWay}">
                     <TextBox Header="Azure AI Foundry endpoint" Text="{x:Bind ViewModel.Endpoint, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -53,28 +53,7 @@
                 <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
                            Text="A claim that names a file or class in one is checked against that code. Up to three matching files (the first 6,000 characters of each) go to the model with the claim. A URL is cloned to this PC and refreshed at each start; a private one needs a GitHub or Azure DevOps personal access token with read access to code (one token for all)." />
 
-                <!-- 3. Transcription: which Whisper model, on which processor, and the call's voices told apart -->
-                <ComboBox Header="Transcription" ItemsSource="{x:Bind vm:SettingsViewModel.WhisperModelNames}" HorizontalAlignment="Stretch" Margin="0,4,0,0"
-                          SelectedIndex="{x:Bind ViewModel.WhisperModel, Mode=TwoWay}"
-                          ToolTipService.ToolTip="Whisper runs on this PC. A bigger model hears names and numbers better and takes longer per sentence; it is downloaded once, when applied." />
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <ToggleSwitch Header="Use the graphics card" IsOn="{x:Bind ViewModel.UseGpu, Mode=TwoWay}" MinWidth="0"
-                                  ToolTipService.ToolTip="Runs Whisper on the graphics card through Vulkan (NVIDIA, AMD or Intel), several times faster; the CPU is used when there is none. Takes effect at the next start." />
-                    <ToggleSwitch Grid.Column="1" Header="Tell voices apart" IsOn="{x:Bind ViewModel.SeparateSpeakers, Mode=TwoWay}" MinWidth="0"
-                                  ToolTipService.ToolTip="Each voice on the call gets its own name: Them, Them 2, Them 3. Type names under Live as a list (Alex, Sam) to name them in the order they spoke. A speaker model (26 MB) runs on this PC; no audio leaves it." />
-                </Grid>
-
-                <!-- 4. Sharing a meeting's summary: a chat channel's incoming webhook, or an email draft without one -->
-                <PasswordBox Header="Chat webhook for meeting summaries (optional)" Password="{x:Bind ViewModel.ShareWebhook, Mode=TwoWay}" Margin="0,4,0,0"
-                             PlaceholderText="{x:Bind local:SettingsView.WebhookPlaceholder(ViewModel.HasShareWebhook), Mode=OneWay}" />
-                <ToggleSwitch Header="Offer to share when a meeting ends" IsOn="{x:Bind ViewModel.OfferToShare, Mode=TwoWay}" MinWidth="0"
-                              ToolTipService.ToolTip="When you mute after a meeting, or the call ends, that meeting is summed up and the window offers to post it to the webhook (Slack, a Teams workflow, Discord) or, without one, to email it. Nothing is sent until you press the button." />
-
-                <!-- 5. The switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
+                <!-- 3. The switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
                 <Grid ColumnSpacing="12" RowSpacing="2" Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -99,10 +78,36 @@
                     <ToggleSwitch Grid.Row="3" Header="Watch the screen" IsOn="{x:Bind ViewModel.WatchScreen, Mode=TwoWay}" MinWidth="0"
                                   ToolTipService.ToolTip="Every 3 seconds the monitor you are working on is captured; when it has changed, the model describes it, and what is said is checked against what is shown, on the Screen facts page. Pictures go to your Foundry resource and are never saved. The HUD is hidden from captures and screen sharing while this is on." />
                 </Grid>
+
+                <!-- 4. Advanced, folded away: what most people never change (the Whisper model, the graphics card, voices, sharing).
+                     The rarest settings (threads, vocabulary, language, update feed) are in settings.json only; the README lists them. -->
+                <Expander Header="Advanced: transcription, voices, sharing" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          Margin="0,4,0,0" IsExpanded="False">
+                    <StackPanel Spacing="10">
+                        <ComboBox Header="Transcription" ItemsSource="{x:Bind config:SettingsViewModel.WhisperModelNames}" HorizontalAlignment="Stretch"
+                                  SelectedIndex="{x:Bind ViewModel.WhisperModel, Mode=TwoWay}"
+                                  ToolTipService.ToolTip="Whisper runs on this PC. A bigger model hears names and numbers better and takes longer per sentence; it is downloaded once, when applied." />
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <ToggleSwitch Header="Use the graphics card" IsOn="{x:Bind ViewModel.UseGpu, Mode=TwoWay}" MinWidth="0"
+                                          ToolTipService.ToolTip="Runs Whisper on the graphics card through Vulkan (NVIDIA, AMD or Intel); the CPU is used when there is none. Takes effect at the next start." />
+                            <ToggleSwitch Grid.Column="1" Header="Tell voices apart" IsOn="{x:Bind ViewModel.SeparateSpeakers, Mode=TwoWay}" MinWidth="0"
+                                          ToolTipService.ToolTip="Each voice on the call gets its own name: Them, Them 2, Them 3. Type names under Live as a list (Alex, Sam) to name them in the order they spoke. A speaker model (26 MB) runs on this PC; no audio leaves it." />
+                        </Grid>
+                        <!-- Sharing a meeting's summary: a chat channel's incoming webhook, or an email draft without one -->
+                        <PasswordBox Header="Chat webhook for meeting summaries" Password="{x:Bind ViewModel.ShareWebhook, Mode=TwoWay}"
+                                     PlaceholderText="{x:Bind local:SettingsView.WebhookPlaceholder(ViewModel.HasShareWebhook), Mode=OneWay}" />
+                        <ToggleSwitch Header="Offer to share when a meeting ends" IsOn="{x:Bind ViewModel.OfferToShare, Mode=TwoWay}" MinWidth="0"
+                                      ToolTipService.ToolTip="When you mute after a meeting, or the call ends, that meeting is summed up and the window offers to post it to the webhook (Slack, a Teams workflow, Discord) or, without one, to email it. Nothing is sent until you press the button." />
+                    </StackPanel>
+                </Expander>
             </StackPanel>
         </ScrollViewer>
 
-        <!-- 6. What Apply found, then the buttons: always in view, however short the window -->
+        <!-- 5. What Apply found, then the buttons: always in view, however short the window -->
         <Grid Grid.Row="1" ColumnSpacing="8" RowSpacing="6" Padding="4,0,12,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -118,10 +123,9 @@
                 <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{x:Bind local:SettingsView.Dot(ViewModel.Message), Mode=OneWay}" />
                 <TextBlock Text="{x:Bind ViewModel.Message, Mode=OneWay}" Style="{StaticResource HudCaption}" TextWrapping="Wrap" VerticalAlignment="Center" />
             </StackPanel>
-            <Button Grid.Row="1" Content="Quit PoVoiceHud" Click="Quit_Click" />
-            <!-- When this copy was built (YYMMDD) and its version, quietly in the corner -->
-            <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.BuildStamp}" Style="{StaticResource HudCaption}" FontSize="11"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2" />
+            <!-- When this copy was built (YYMMDD) and its version, quietly in the corner. Quitting is the window's close button or the tray. -->
+            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{x:Bind ViewModel.BuildStamp}" Style="{StaticResource HudCaption}" FontSize="11"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,0,4,2" />
             <Button Grid.Row="1" Grid.Column="2" Content="Cancel" Command="{x:Bind ViewModel.CancelCommand}"
                     ToolTipService.ToolTip="Leave the settings as they were (Esc)">
                 <Button.KeyboardAccelerators>

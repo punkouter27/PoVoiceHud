@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoVoiceHud — HUD and settings, before and after (2026-10-05)</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1b1b1f; --soft: #5c5f66; --line: #d9dbe0; --bg: #f6f7f9; --card: #ffffff; --mark: #c81e2d; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #ececf1; --soft: #a3a7b0; --line: #34363c; --bg: #17181b; --card: #212327; } }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 40px 0 12px; }
+  h3 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  p.lead { color: var(--soft); margin: 0 0 8px; max-width: 80ch; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+  .side { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .side img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  ol { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: n; }
+  ol li { counter-increment: n; position: relative; padding: 0 0 8px 34px; }
+  ol li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+                  background: var(--mark); color: #fff; font-weight: 700; font-size: 13px; line-height: 22px; text-align: center; }
+  .note { color: var(--soft); font-size: 14px; margin-top: 12px; }
+  code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>HUD and settings — before and after</h1>
+  <p class="lead">Captured on 2026-10-05 from Debug builds running with sample cards (<code>--demo</code>), at 150 % display scaling.
+    "Before" is commit <code>3385914</code>; "after" is the working tree with the 40 audit items applied.
+    The red numbers on each picture match the numbered notes under it.</p>
+
+  <h2>1. The HUD</h2>
+  <div class="pair">
+    <section class="side">
+      <h3>Before</h3>
+      <img src="261005-hud-before.png" alt="The old HUD: a status row under the pill, cards, a two-line transcript and a large empty area at the bottom">
+      <ol>
+        <li>Microphone state is a coloured dot (green or red only) with a separate level bar next to it.</li>
+        <li>A status row repeats the mute hint and shows "No repo selected" even in Simple mode.</li>
+        <li>File links sit side by side and run off the edge of the card.</li>
+        <li>Every card looks the same whatever its verdict; the web link is just "Open ↗"; nothing can be copied.</li>
+        <li>The transcript always takes several lines.</li>
+        <li>The window is a fixed 540 px tall, so this area stays empty.</li>
+      </ol>
+    </section>
+    <section class="side">
+      <h3>After</h3>
+      <img src="261005-hud-after.png" alt="The new HUD: microphone icon, headline, tally, coloured verdict cards, one transcript line, no empty space">
+      <ol>
+        <li>A microphone icon: green when live, red with a slash when muted. The halo behind it swells with your voice, replacing the level bar.</li>
+        <li>Session tally of fact-check verdicts; its tooltip splits the count into you and the call.</li>
+        <li>The pill's bottom edge takes the focus card's verdict colour. While a sentence is being checked, a running bar shows here instead.</li>
+        <li>The tag is coloured by verdict: green supported, red contradicted, amber unverified; other sources keep the accent blue.</li>
+        <li>A link names the site it goes to. Fact-check links are marked "cited by the model", because a model can invent a URL.</li>
+        <li>Copy puts the headline, answer and link on the clipboard.</li>
+        <li>The transcript is one line; click it for the recent lines. It is hidden by default in Simple mode and shown here because the sample is a repo session.</li>
+        <li>The window ends where the content ends, and grows or shrinks with it.</li>
+      </ol>
+      <p class="note">The status row is gone: the pill headline shows whichever happened last, a new card or a status change such as "Muted".
+        File links are now stacked, so each one is readable (the SCHEMA card on the shelf shows two).</p>
+    </section>
+  </div>
+
+  <h2>2. Settings</h2>
+  <div class="pair">
+    <section class="side">
+      <h3>Before</h3>
+      <img src="261005-settings-before.png" alt="The old settings flyout: endpoint, model, key, a Use local Ollama button, an Advanced expander and Save">
+      <ol>
+        <li>Every model field is shown whichever provider you use, under a paragraph of explanation.</li>
+        <li>The endpoint has to be filled in even for a local model.</li>
+        <li>A separate button fills the fields in for Ollama.</li>
+        <li>The mode (Simple or Repo) is hidden inside Advanced, together with the repository path.</li>
+        <li>Save is always enabled, says nothing when it works, and is followed by a "Restart to apply" button.</li>
+      </ol>
+    </section>
+    <section class="side">
+      <h3>After</h3>
+      <img src="261005-settings-after.png" alt="The new settings: a provider choice, the fields that provider needs, Test, Mode, Advanced and Save">
+      <ol>
+        <li>One choice of provider. "Local Ollama" leaves only the Model box; "Azure AI Foundry" shows what is pictured.</li>
+        <li>Endpoint and API key appear only for Azure AI Foundry.</li>
+        <li>Test sends one message with what is typed and reports "✓ answered" or the error, so a bad key shows up here.</li>
+        <li>Mode is on the main view. Choosing Repo reveals the Repository row.</li>
+        <li>Advanced holds everything that has a sensible default: mute hotkey, contradiction sound, transcript line, session log, local chatter filter, audio input, source switches and Azure DevOps.</li>
+        <li>Save stays greyed out until something changes, applies at once without a restart, and then reads "✓ Saved and applied".</li>
+      </ol>
+      <p class="note">This picture is the settings content shown inside the window by <code>--demo --settings</code>. In the app the same content opens as a flyout from the gear, as in the "before" picture.
+        The endpoint is blanked in both pictures because it names a private Azure resource.</p>
+    </section>
+  </div>
+</main>
+</body>
+</html>

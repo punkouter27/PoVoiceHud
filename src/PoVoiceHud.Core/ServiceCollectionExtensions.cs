@@ -1,15 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using PoVoiceHud.Core.Asr;
 using PoVoiceHud.Core.Audio;
+using PoVoiceHud.Core.Code;
 using PoVoiceHud.Core.Config;
-using PoVoiceHud.Core.Providers;
-using PoVoiceHud.Core.Providers.FactCheck;
-using PoVoiceHud.Core.Repos;
-using PoVoiceHud.Core.Sessions;
+using PoVoiceHud.Core.FactCheck;
+using PoVoiceHud.Core.Meetings;
+using PoVoiceHud.Core.Models;
 using PoVoiceHud.Core.Screen;
-using PoVoiceHud.Core.Vad;
+using PoVoiceHud.Core.Transcription;
 using PoVoiceHud.Core.Voices;
 
 namespace PoVoiceHud.Core;
@@ -35,7 +34,7 @@ public static class ServiceCollectionExtensions
         IReadOnlyList<(string Location, string Root)>? repos = null)
     {
         services.AddLogging();
-        services.TryAddSingleton<IAudioSource>(_ => new WasapiDualCapture(AudioInput.Both));   // you and the call, always
+        services.TryAddSingleton<IAudioSource>(_ => new WasapiDualCapture());   // you and the call, always
         services.TryAddSingleton(_ => new SileroVad(models.Silero));
         services.TryAddSingleton(_ => new ModelStats());
         services.AddSingleton(_ => new CodeRepositories([.. (repos ?? []).Select(r =>

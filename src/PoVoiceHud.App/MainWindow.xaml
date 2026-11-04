@@ -4,7 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:winuiex="using:WinUIEx"
     xmlns:local="using:PoVoiceHud.App"
-    xmlns:vm="using:PoVoiceHud.Core.ViewModels"
+    xmlns:hud="using:PoVoiceHud.Core.Hud"
+    xmlns:facts="using:PoVoiceHud.Core.FactCheck"
+    xmlns:code="using:PoVoiceHud.Core.Code"
+    xmlns:meetings="using:PoVoiceHud.Core.Meetings"
     Title="PoVoiceHud"
     IsAlwaysOnTop="True"
     MinWidth="420"
@@ -132,7 +135,7 @@
             <Grid Grid.Row="1" MaxWidth="900" RowSpacing="6">
                 <Grid.Resources>
                     <!-- One row of Facts or Screen facts: a claim found correct or incorrect, its reason and its source -->
-                    <DataTemplate x:Key="FactRow" x:DataType="vm:FactViewModel">
+                    <DataTemplate x:Key="FactRow" x:DataType="facts:FactViewModel">
                         <Border Padding="10,8" CornerRadius="6" Background="{x:Bind local:MainWindow.FactBack(IsCorrect)}">
                             <Grid ColumnSpacing="10">
                                 <Grid.ColumnDefinitions>
@@ -191,12 +194,9 @@
                             <SelectorBarItem.Icon><FontIcon Glyph="&#xE81C;" /></SelectorBarItem.Icon>
                         </SelectorBarItem>
                     </SelectorBar>
-                    <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.FactsSummary, Mode=OneWay}" Style="{StaticResource HudCaption}"
+                    <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.ListSummary, Mode=OneWay}" Style="{StaticResource HudCaption}"
                                VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                               Visibility="{x:Bind ViewModel.ShowsFacts, Mode=OneWay}" />
-                    <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.CodeSummary, Mode=OneWay}" Style="{StaticResource HudCaption}"
-                               VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                               Visibility="{x:Bind ViewModel.ShowsCode, Mode=OneWay}" />
+                               Visibility="{x:Bind ViewModel.ShowsList, Mode=OneWay}" />
                     <!-- Live: what the two sides are called ("Them" becomes "Alex" for this call) -->
                     <DropDownButton Grid.Column="2" Padding="10,4" Visibility="{x:Bind ViewModel.ShowsLive, Mode=OneWay}"
                                     ToolTipService.ToolTip="Name the two sides for this call" AutomationProperties.Name="Speaker names">
@@ -215,9 +215,6 @@
                             </Flyout>
                         </DropDownButton.Flyout>
                     </DropDownButton>
-                    <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.ScreenSummary, Mode=OneWay}" Style="{StaticResource HudCaption}"
-                               VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                               Visibility="{x:Bind ViewModel.ShowsScreen, Mode=OneWay}" />
                     <Button Grid.Column="2" Click="Copy_Click" IsEnabled="{x:Bind ViewModel.CanCopy, Mode=OneWay}" Padding="10,4"
                             Visibility="{x:Bind ViewModel.ShowsList, Mode=OneWay}"
                             ToolTipService.ToolTip="Copy this page's list as filtered, one line each, to paste into notes, a chat or an email">
@@ -236,7 +233,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBox PlaceholderText="Filter by words or a name" Text="{x:Bind ViewModel.FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.Name="Filter" />
-                    <ComboBox Grid.Column="1" ItemsSource="{x:Bind vm:HudViewModel.FilterKinds}" SelectedIndex="{x:Bind ViewModel.FilterKind, Mode=TwoWay}"
+                    <ComboBox Grid.Column="1" ItemsSource="{x:Bind hud:HudViewModel.FilterKinds}" SelectedIndex="{x:Bind ViewModel.FilterKind, Mode=TwoWay}"
                               MinWidth="140" AutomationProperties.Name="Show" />
                 </Grid>
 
@@ -251,7 +248,7 @@
                                 <StackLayout Spacing="4" />
                             </ItemsRepeater.Layout>
                             <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="vm:LiveLineViewModel">
+                                <DataTemplate x:DataType="hud:LiveLineViewModel">
                                     <Border Padding="10,6" CornerRadius="6" Background="{x:Bind local:MainWindow.LineBack(State), Mode=OneWay}">
                                         <StackPanel Spacing="2">
                                             <TextBlock Style="{StaticResource HudLine}" Foreground="{x:Bind local:MainWindow.LineText(State), Mode=OneWay}">
@@ -303,7 +300,7 @@
                                 <StackLayout Spacing="6" />
                             </ItemsRepeater.Layout>
                             <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="vm:CodeFactViewModel">
+                                <DataTemplate x:DataType="code:CodeFactViewModel">
                                     <Border Padding="10,8" CornerRadius="6" Background="{x:Bind local:MainWindow.CodeBack(Verdict)}">
                                         <Grid ColumnSpacing="10">
                                             <Grid.ColumnDefinitions>
@@ -321,7 +318,7 @@
                                                 <!-- The files it rests on, each with an icon for its kind: on GitHub or Azure DevOps, or in VS Code at the line -->
                                                 <ItemsRepeater ItemsSource="{x:Bind Sources}" Visibility="{x:Bind HasSources}" Margin="-4,2,0,0">
                                                     <ItemsRepeater.ItemTemplate>
-                                                        <DataTemplate x:DataType="vm:CodeSourceViewModel">
+                                                        <DataTemplate x:DataType="code:CodeSourceViewModel">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <HyperlinkButton Command="{x:Bind OpenCommand}" Style="{StaticResource HudLink}" ToolTipService.ToolTip="{x:Bind Path}">
                                                                     <StackPanel Orientation="Horizontal" Spacing="5">
@@ -416,7 +413,7 @@
                                 <StackLayout Spacing="2" />
                             </ItemsRepeater.Layout>
                             <ItemsRepeater.ItemTemplate>
-                                <DataTemplate x:DataType="vm:HistoryRow">
+                                <DataTemplate x:DataType="meetings:HistoryRow">
                                     <Grid Padding="10,3" CornerRadius="6" ColumnSpacing="6" Background="{x:Bind local:MainWindow.HistoryBack(Kind)}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />

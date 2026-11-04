@@ -15,6 +15,8 @@ indent_size = 2
 [*.cs]
 csharp_style_namespace_declarations = file_scoped:warning
 dotnet_sort_system_directives_first = true
+# A using nothing in the file needs fails the build.
+dotnet_diagnostic.IDE0005.severity = warning
 
 # Analyzer rules switched off, each for a stated reason:
 # CA1716 — names clashing with Visual Basic keywords (Stop); this code is only ever consumed from C#.
@@ -23,6 +25,10 @@ dotnet_diagnostic.CA1716.severity = none
 dotnet_diagnostic.CA1848.severity = none
 # CA1873 — lazy evaluation of log arguments; same reason: nothing is logged per utterance or per audio frame.
 dotnet_diagnostic.CA1873.severity = none
+# CS1591 — a public member without an XML comment; the documentation file exists only so IDE0005 runs, and plain names often say enough.
+dotnet_diagnostic.CS1591.severity = none
+# CS1573 — a method documents some parameters but not all; only the ones whose meaning is not plain from the name are described.
+dotnet_diagnostic.CS1573.severity = none
 
 # WinUIEx marks WindowEx.Icon obsolete and the XAML compiler still emits a reference to it.
 # That is the only place the obsolete-member warning is waived; everywhere else it stays an error.
@@ -30,8 +36,5 @@ dotnet_diagnostic.CA1873.severity = none
 dotnet_diagnostic.CS0618.severity = none
 
 [tests/**.cs]
-# Test names are sentences with underscores; assertions compare fixed ASCII text, so culture rules add nothing;
-# and no test class is ever subclassed, so the finalizer-suppression pattern has no one to protect.
+# Test names are sentences with underscores.
 dotnet_diagnostic.CA1707.severity = none
-dotnet_diagnostic.CA1310.severity = none
-dotnet_diagnostic.CA1816.severity = none

@@ -1,14 +1,13 @@
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using PoVoiceHud.Core.Asr;
 using PoVoiceHud.Core.Audio;
 using PoVoiceHud.Core.Config;
-using PoVoiceHud.Core.Providers;
-using PoVoiceHud.Core.Providers.FactCheck;
+using PoVoiceHud.Core.FactCheck;
+using PoVoiceHud.Core.Models;
 using PoVoiceHud.Core.Tests.Fixtures;
-using PoVoiceHud.Core.Tests.Vad;
-using PoVoiceHud.Core.Vad;
+using PoVoiceHud.Core.Tests.Transcription;
+using PoVoiceHud.Core.Transcription;
 
 namespace PoVoiceHud.Core.Tests;
 

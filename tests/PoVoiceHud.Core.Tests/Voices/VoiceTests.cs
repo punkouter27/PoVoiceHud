@@ -1,6 +1,7 @@
-using PoVoiceHud.Core.Asr;
-using PoVoiceHud.Core.Tests.Vad;
+using PoVoiceHud.Core.Tests.Transcription;
+using PoVoiceHud.Core.Transcription;
 using PoVoiceHud.Core.Voices;
+
 
 namespace PoVoiceHud.Core.Tests.Voices;
 

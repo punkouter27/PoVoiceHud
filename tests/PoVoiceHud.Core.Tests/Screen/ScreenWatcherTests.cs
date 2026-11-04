@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using PoVoiceHud.Core.Providers.FactCheck;
+using PoVoiceHud.Core.Models;
 using PoVoiceHud.Core.Screen;
 
 namespace PoVoiceHud.Core.Tests.Screen;

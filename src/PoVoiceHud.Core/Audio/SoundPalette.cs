@@ -57,17 +57,27 @@ public static class SoundPalette
             BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(i * 4), (short)(mono[i] * left * short.MaxValue));
             BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(i * 4 + 2), (short)(mono[i] * right * short.MaxValue));
         }
+        WasapiOut? output = null;
         try
         {
-            var output = new WasapiOut(AudioClientShareMode.Shared, 50);
-            output.PlaybackStopped += (_, _) => output.Dispose();
+            // Each cue owns its output and lets it go when it has played: nothing else holds a reference to it.
+            output = new WasapiOut(AudioClientShareMode.Shared, 50);
+            output.PlaybackStopped += Played;
             output.Init(new RawSourceWaveStream(new MemoryStream(bytes), new WaveFormat(Rate, 16, 2)));
             output.Play();
         }
         catch (Exception e) when (e is System.Runtime.InteropServices.COMException or InvalidOperationException)
         {
             // no output device, or it is held exclusively: a missing cue is not worth surfacing
+            output?.Dispose();
         }
+    }
+
+    private static void Played(object? sender, StoppedEventArgs e)
+    {
+        if (sender is not WasapiOut output) return;
+        output.PlaybackStopped -= Played;
+        output.Dispose();
     }
 
     /// <summary>The cue's samples, for tests and for its length.</summary>

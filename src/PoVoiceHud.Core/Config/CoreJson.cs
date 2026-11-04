@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using PoVoiceHud.Core.Sessions;
+using PoVoiceHud.Core.Meetings;
 
 namespace PoVoiceHud.Core.Config;
 

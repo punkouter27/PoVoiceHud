@@ -1,15 +1,14 @@
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
 using NAudio.Wave;
-using PoVoiceHud.Core.Config;
 
 namespace PoVoiceHud.Core.Audio;
 
 /// <summary>
-/// Default communications render (loopback) and/or capture (mic) devices per <see cref="AudioInput"/>,
-/// re-bound when Windows changes them.
+/// The default communications render (loopback, the call) and capture (mic, you) devices, mixed into one stream
+/// and re-bound when Windows changes them.
 /// </summary>
-public sealed class WasapiDualCapture(AudioInput input = AudioInput.Both) : IAudioSource, IMMNotificationClient
+public sealed class WasapiDualCapture : IAudioSource, IMMNotificationClient
 {
     private readonly object _gate = new();
     private readonly MMDeviceEnumerator _devices = new();
@@ -22,14 +21,6 @@ public sealed class WasapiDualCapture(AudioInput input = AudioInput.Both) : IAud
 
     public event Action<PcmFrame>? FrameAvailable;
     public event Action<string>? Status;
-
-    /// <summary>Which endpoints an input selection opens: (loopback, mic).</summary>
-    public static (bool Loopback, bool Mic) DevicesFor(AudioInput input) => input switch
-    {
-        AudioInput.Mic => (false, true),
-        AudioInput.Remote => (true, false),
-        _ => (true, true),
-    };
 
     private bool _registered;
 
@@ -78,17 +69,15 @@ public sealed class WasapiDualCapture(AudioInput input = AudioInput.Both) : IAud
         Close();
         try
         {
-            var (useLoopback, useMic) = DevicesFor(input);
-            if (useLoopback) _loop = new WasapiLoopbackCapture(_devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Communications));
-            if (useMic) _mic = new WasapiCapture(_devices.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications));
-            var graph = new MixGraph(_loop?.WaveFormat, _mic?.WaveFormat);
-            if (_loop is not null) _loop.DataAvailable += (_, e) => graph.AddLoopback(e.Buffer, e.BytesRecorded);
-            if (_mic is not null) _mic.DataAvailable += (_, e) => graph.AddMic(e.Buffer, e.BytesRecorded);
-            _graph = graph;
-            _loop?.StartRecording();
-            _mic?.StartRecording();
+            _loop = new WasapiLoopbackCapture(_devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Communications));
+            _mic = new WasapiCapture(_devices.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications));
+            _graph = new MixGraph(_loop.WaveFormat, _mic.WaveFormat);
+            _loop.DataAvailable += OnLoopback;
+            _mic.DataAvailable += OnMic;
+            _loop.StartRecording();
+            _mic.StartRecording();
             _timer = new Timer(_ => Tick(), null, PcmFrame.Duration, PcmFrame.Duration);
-            Status?.Invoke(input switch { AudioInput.Mic => "Listening", AudioInput.Remote => "Listening to the call", _ => "Listening to you and the call" });
+            Status?.Invoke("Listening to you and the call");
         }
         catch (Exception e)
         {
@@ -97,9 +86,15 @@ public sealed class WasapiDualCapture(AudioInput input = AudioInput.Both) : IAud
         }
     }
 
+    // Raised on NAudio's capture threads; a buffer that arrives after Close finds no graph and is dropped.
+    private void OnLoopback(object? sender, WaveInEventArgs e) => Volatile.Read(ref _graph)?.AddLoopback(e.Buffer, e.BytesRecorded);
+    private void OnMic(object? sender, WaveInEventArgs e) => Volatile.Read(ref _graph)?.AddMic(e.Buffer, e.BytesRecorded);
+
     private void Close()
     {
         _timer?.Dispose();
+        if (_loop is not null) _loop.DataAvailable -= OnLoopback;
+        if (_mic is not null) _mic.DataAvailable -= OnMic;
         _loop?.Dispose();
         _mic?.Dispose();
         (_timer, _loop, _mic, _graph) = (null, null, null, null);

@@ -2,13 +2,12 @@ using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
-using PoVoiceHud.Core.Asr;
 using PoVoiceHud.Core.Audio;
-using PoVoiceHud.Core.Providers;
-using PoVoiceHud.Core.Providers.FactCheck;
-using PoVoiceHud.Core.Repos;
+using PoVoiceHud.Core.Code;
+using PoVoiceHud.Core.FactCheck;
+using PoVoiceHud.Core.Models;
 using PoVoiceHud.Core.Screen;
-using PoVoiceHud.Core.Vad;
+using PoVoiceHud.Core.Transcription;
 using PoVoiceHud.Core.Voices;
 
 namespace PoVoiceHud.Core;
@@ -67,8 +66,11 @@ public sealed partial class HudPipeline : IDisposable
         // Raised while a frame is pushed, so the clock time it started is now less the audio since its start.
         _segmenter.UtteranceReady += u => _utterances.Writer.TryWrite((u, DateTimeOffset.Now - (_frameAt - u.Start)));
         _audio.FrameAvailable += OnFrame;
-        _audio.Status += s => _status.Writer.TryWrite(s);
+        _audio.Status += OnAudioStatus;
     }
+
+    private void OnAudioStatus(string status) => _status.Writer.TryWrite(status);
+    private void OnScreenSeen(ScreenSeen seen) => _screens.Writer.TryWrite(seen);
 
     public ChannelReader<TranscriptLine> Transcript => _transcript.Reader;
     public ChannelReader<Checked> Verdicts => _verdicts.Reader;
@@ -105,10 +107,14 @@ public sealed partial class HudPipeline : IDisposable
         set
         {
             var old = Interlocked.Exchange(ref _screen, value);
-            old?.Dispose();
+            if (old is not null)
+            {
+                old.Seen -= OnScreenSeen;
+                old.Dispose();
+            }
             if (value is null) return;
             value.IsPaused = IsMuted;
-            value.Seen += seen => _screens.Writer.TryWrite(seen);
+            value.Seen += OnScreenSeen;
             if (Volatile.Read(ref _started)) value.Start();
         }
     }
@@ -309,6 +315,7 @@ public sealed partial class HudPipeline : IDisposable
         _cts.Cancel();
         Screen = null;
         _audio.FrameAvailable -= OnFrame;
+        _audio.Status -= OnAudioStatus;
         _audio.Stop();
         // Readers (the UI's drain loops) end instead of waiting forever on a pipeline that is gone.
         _transcript.Writer.TryComplete();

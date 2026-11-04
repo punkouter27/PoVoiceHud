@@ -9,6 +9,6 @@ public class SmokeTests
     public void Core_does_not_reference_WinUI()
     {
         var refs = Assembly.Load("PoVoiceHud.Core").GetReferencedAssemblies().Select(a => a.Name!);
-        Assert.DoesNotContain(refs, n => n.StartsWith("Microsoft.WinUI") || n.StartsWith("Microsoft.UI"));
+        Assert.DoesNotContain(refs, n => n.StartsWith("Microsoft.WinUI", StringComparison.Ordinal) || n.StartsWith("Microsoft.UI", StringComparison.Ordinal));
     }
 }

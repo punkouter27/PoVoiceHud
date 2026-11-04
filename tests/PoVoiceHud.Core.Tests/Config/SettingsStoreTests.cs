@@ -1,8 +1,9 @@
 using PoVoiceHud.Core.Config;
 
+
 namespace PoVoiceHud.Core.Tests.Config;
 
-public class SettingsStoreTests : IDisposable
+public sealed class SettingsStoreTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "PoVoiceHud.Tests", Guid.NewGuid().ToString("N"));
     private string File_ => Path.Combine(_dir, "settings.json");

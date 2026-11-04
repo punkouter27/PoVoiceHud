@@ -7,7 +7,11 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using PoVoiceHud.Core;
 using PoVoiceHud.Core.Audio;
-using PoVoiceHud.Core.ViewModels;
+using PoVoiceHud.Core.Code;
+using PoVoiceHud.Core.Config;
+using PoVoiceHud.Core.FactCheck;
+using PoVoiceHud.Core.Hud;
+using PoVoiceHud.Core.Screen;
 using Windows.ApplicationModel.DataTransfer;
 using WinUIEx;
 
@@ -202,7 +206,7 @@ public sealed partial class MainWindow : WindowEx
     }
 
     /// <summary>The Settings page, shown in place of Live and Facts while it is open or while setup is needed.</summary>
-    public void AttachSettings(SettingsViewModel settings, Action quit) => SettingsHost.Content = new Views.SettingsView(settings) { Quit = quit };
+    public void AttachSettings(SettingsViewModel settings) => SettingsHost.Content = new Views.SettingsView(settings);
 
     public static Visibility Not(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
 
@@ -268,19 +272,19 @@ public sealed partial class MainWindow : WindowEx
     public static string FactGlyph(bool correct) => LineGlyph(correct ? LineState.Correct : LineState.Incorrect);
 
     /// <summary>A code fact looks like its line: an answer in the accent colour, a verdict as on Facts ("can't tell" plain).</summary>
-    private static LineState CodeState(Core.Providers.Verdict? verdict) => verdict switch
+    private static LineState CodeState(Verdict? verdict) => verdict switch
     {
         null => LineState.Answered,
-        Core.Providers.Verdict.Supported => LineState.Correct,
-        Core.Providers.Verdict.Contradicted => LineState.Incorrect,
+        Verdict.Supported => LineState.Correct,
+        Verdict.Contradicted => LineState.Incorrect,
         _ => LineState.CantTell,
     };
 
-    public static Brush CodeBack(Core.Providers.Verdict? verdict) => CodeState(verdict) == LineState.CantTell ? Theme("SubtleFillColorSecondaryBrush") : LineBack(CodeState(verdict));
+    public static Brush CodeBack(Verdict? verdict) => CodeState(verdict) == LineState.CantTell ? Theme("SubtleFillColorSecondaryBrush") : LineBack(CodeState(verdict));
 
-    public static Brush CodeFore(Core.Providers.Verdict? verdict) => LineFore(CodeState(verdict));
+    public static Brush CodeFore(Verdict? verdict) => LineFore(CodeState(verdict));
 
-    public static string CodeGlyph(Core.Providers.Verdict? verdict) => LineGlyph(CodeState(verdict));
+    public static string CodeGlyph(Verdict? verdict) => LineGlyph(CodeState(verdict));
 
     private static Brush Theme(string key) => Application.Current.Resources.TryGetValue(key, out var value) && value is Brush brush ? brush : None;
 
@@ -295,13 +299,13 @@ public sealed partial class MainWindow : WindowEx
         ViewModel.SetStatus("Listening to you and the call");
         ViewModel.HasRepository = true;
         // Two voices on the call, told apart: "Them" and "Them 2".
-        (SourceHint Source, int Voice, int At, string Text, Core.Providers.Verdict? Verdict, string Reason)[] said =
+        (SourceHint Source, int Voice, int At, string Text, Verdict? Verdict, string Reason)[] said =
         [
             (SourceHint.Teams, 1, 241, "Okay, let's get started with the roadmap review.", null, ""),
-            (SourceHint.Mic, 0, 246, "The Eiffel Tower was completed in 1889.", Core.Providers.Verdict.Supported, "It was finished in March 1889 for the Exposition Universelle."),
+            (SourceHint.Mic, 0, 246, "The Eiffel Tower was completed in 1889.", Verdict.Supported, "It was finished in March 1889 for the Exposition Universelle."),
             (SourceHint.Teams, 2, 250, "Right, and I think we should keep that example in the deck.", null, ""),
-            (SourceHint.Mic, 0, 255, "Python was created by Dennis Ritchie.", Core.Providers.Verdict.Contradicted, "Guido van Rossum created Python; Dennis Ritchie created C."),
-            (SourceHint.Teams, 1, 262, "Octopuses dream in colour, apparently.", Core.Providers.Verdict.Unverified, "They change colour in their sleep, but whether they dream is unknown."),
+            (SourceHint.Mic, 0, 255, "Python was created by Dennis Ritchie.", Verdict.Contradicted, "Guido van Rossum created Python; Dennis Ritchie created C."),
+            (SourceHint.Teams, 1, 262, "Octopuses dream in colour, apparently.", Verdict.Unverified, "They change colour in their sleep, but whether they dream is unknown."),
         ];
         foreach (var (source, voice, at, text, verdict, reason) in said)
         {
@@ -309,21 +313,21 @@ public sealed partial class MainWindow : WindowEx
             ViewModel.AddTranscript(line);
             if (verdict is not { } v) continue;
             ViewModel.MarkChecking(line, busy: true);
-            var link = v == Core.Providers.Verdict.Unverified ? null
-                : new Uri($"https://en.wikipedia.org/wiki/{(v == Core.Providers.Verdict.Supported ? "Eiffel_Tower" : "Python_(programming_language)")}");
-            ViewModel.Push(new Checked(line, new Core.Providers.Insight(text.TrimEnd('.'), v, reason, 0.9, link, LinkChecked: true)));
+            var link = v == Verdict.Unverified ? null
+                : new Uri($"https://en.wikipedia.org/wiki/{(v == Verdict.Supported ? "Eiffel_Tower" : "Python_(programming_language)")}");
+            ViewModel.Push(new Checked(line, new Insight(text.TrimEnd('.'), v, reason, 0.9, link, LinkChecked: true)));
             ViewModel.MarkChecking(line, busy: false);
         }
 
         // About the code: a question answered and a statement judged from the repository, then a claim still with the checker.
-        static Core.Repos.CodeSource File(string path, int line) => new(path, new Uri($"https://github.com/acme/site/blob/HEAD/{path}"),
+        static CodeSource File(string path, int line) => new(path, new Uri($"https://github.com/acme/site/blob/HEAD/{path}"),
             new Uri($"vscode://file/C:/src/site/{path}:{line}"));
-        (int At, string Text, Core.Repos.CodeFact Fact)[] code =
+        (int At, string Text, CodeFact Fact)[] code =
         [
             (264, "How many pages are on our website?", new("How many pages are on the website", null,
                 "Nine: docs/index.html and the eight privacy pages under docs/privacy.", [File("docs/index.html", 1), File("docs/privacy/pobox.html", 1)])),
             (266, "The invoice service retries failed payments three times.", new("The invoice service retries failed payments three times",
-                Core.Providers.Verdict.Contradicted, "InvoiceService has no retry logic: a failed payment is logged and returned.", [File("src/Services/InvoiceService.cs", 3)])),
+                Verdict.Contradicted, "InvoiceService has no retry logic: a failed payment is logged and returned.", [File("src/Services/InvoiceService.cs", 3)])),
         ];
         foreach (var (at, text, fact) in code)
         {
@@ -333,19 +337,19 @@ public sealed partial class MainWindow : WindowEx
         }
         // The screen: a field-work form is open, and two things said about it are checked against it.
         ViewModel.WatchesScreen = true;
-        ViewModel.ShowScreen(new Core.Screen.ScreenSeen(now.AddSeconds(-40), "Field Work Approval, JSA tab: \"COV storm drain outfall verification\". " +
+        ViewModel.ShowScreen(new ScreenSeen(now.AddSeconds(-40), "Field Work Approval, JSA tab: \"COV storm drain outfall verification\". " +
             "Start date: 09/28/2026; end date: 09/28/2026. Field work lead: Cindy Clark. Location: I-5 bridge and Columbia Way. Status: Approved. " +
             "JSA form submitted 09/17/2026 by Cindy Clark."));
-        (int At, string Text, Core.Providers.Verdict Verdict, string Reason)[] onScreen =
+        (int At, string Text, Verdict Verdict, string Reason)[] onScreen =
         [
-            (267, "Cindy is the lead on the storm drain verification.", Core.Providers.Verdict.Supported, "On screen: The form names Cindy Clark as field work lead."),
-            (268, "That work starts on October 1st.", Core.Providers.Verdict.Contradicted, "On screen: The start date on the form is 09/28/2026."),
+            (267, "Cindy is the lead on the storm drain verification.", Verdict.Supported, "On screen: The form names Cindy Clark as field work lead."),
+            (268, "That work starts on October 1st.", Verdict.Contradicted, "On screen: The start date on the form is 09/28/2026."),
         ];
         foreach (var (at, text, verdict, reason) in onScreen)
         {
             var line = new TranscriptLine(SourceHint.Teams, now.AddSeconds(at - 270), text);
             ViewModel.AddTranscript(line);
-            ViewModel.Push(new Checked(line, new Core.Providers.Insight(text.TrimEnd('.').Replace("That work", "The storm drain verification"), verdict, reason, 0.9, OnScreen: true)));
+            ViewModel.Push(new Checked(line, new Insight(text.TrimEnd('.').Replace("That work", "The storm drain verification"), verdict, reason, 0.9, OnScreen: true)));
         }
         var pending = new TranscriptLine(SourceHint.Mic, now.AddSeconds(-2), "Light from the Sun takes about eight minutes to reach Earth.");
         ViewModel.AddTranscript(pending);

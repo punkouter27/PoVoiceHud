@@ -1,8 +1,5 @@
 namespace PoVoiceHud.Core.Config;
 
-/// <summary>Which devices <see cref="Audio.WasapiDualCapture"/> opens. The app always opens both: you and the call.</summary>
-public enum AudioInput { Mic, Remote, Both }
-
 /// <summary>Where claims, answers and summaries are sent. Written by name in settings.json.</summary>
 [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ModelMode>))]
 public enum ModelMode
@@ -31,8 +28,8 @@ public sealed record Settings
     public string? LocalEndpoint { get; set; }
     /// <summary>The local model's name as its server knows it, such as qwen2.5:7b.</summary>
     public string? LocalModel { get; set; }
-    /// <summary>Which Whisper model transcribes (<see cref="Asr.WhisperModels"/>): bigger is more accurate and slower.</summary>
-    public string WhisperModel { get; set; } = Asr.WhisperModels.Default;
+    /// <summary>Which Whisper model transcribes (<see cref="Transcription.WhisperModels"/>): bigger is more accurate and slower.</summary>
+    public string WhisperModel { get; set; } = Transcription.WhisperModels.Default;
     /// <summary>Runs Whisper on the graphics card (Vulkan) when there is one that can; the CPU otherwise. Takes effect at the next start.</summary>
     public bool UseGpu { get; set; } = true;
     /// <summary>Tells the voices on the call apart ("Them 1", "Them 2") with a speaker model run on this PC.</summary>

@@ -6,6 +6,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Needed for the unused-using rule (IDE0005) to run in the build; the XML files themselves are not shipped or required. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Fail the build on a NuGet advisory rather than emitting a warning nobody reads. -->
     <NuGetAudit>true</NuGetAudit>

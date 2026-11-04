@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoVoiceHud — microphone level meter (2026-10-05)</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1b1b1f; --soft: #5c5f66; --line: #d9dbe0; --bg: #f6f7f9; --card: #ffffff; --mark: #c81e2d; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #ececf1; --soft: #a3a7b0; --line: #34363c; --bg: #17181b; --card: #212327; } }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h3 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  p.lead { color: var(--soft); margin: 0 0 20px; }
+  .side { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .side img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  p.n { margin: 12px 0 0; padding-left: 34px; position: relative; }
+  p.n::before { content: "1"; position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+                background: var(--mark); color: #fff; font-weight: 700; font-size: 13px; line-height: 22px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Microphone level meter</h1>
+  <p class="lead">Only the pill changed, so only the pill is shown. "Before" is cut from the picture you sent; "after" is a Debug build with a sample level of an ordinary speaking voice.</p>
+  <section class="side">
+    <h3>Before</h3>
+    <img src="261005-mic-meter-before.png" alt="The pill with a microphone icon and no visible level">
+    <p class="n">The only sign of your voice was a faint green halo behind the microphone icon, too subtle to notice.</p>
+  </section>
+  <section class="side">
+    <h3>After</h3>
+    <img src="261005-mic-meter-after.png" alt="The pill with a microphone icon followed by five level bars, three of them lit">
+    <p class="n">Five bars next to the microphone light up from left to right with your voice and update ten times a second.
+      Silence and room noise light none, normal speech lights three or four, and five means loud. All bars stay dim while muted. The halo is removed.</p>
+  </section>
+</main>
+</body>
+</html>

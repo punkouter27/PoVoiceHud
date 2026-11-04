@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoVoiceHud — Repo mode settings (2026-10-05)</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1b1b1f; --soft: #5c5f66; --line: #d9dbe0; --bg: #f6f7f9; --card: #ffffff; --mark: #c81e2d; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #ececf1; --soft: #a3a7b0; --line: #34363c; --bg: #17181b; --card: #212327; } }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h3 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  p.lead { color: var(--soft); margin: 0 0 20px; max-width: 80ch; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+  .side { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .side img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  ol { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: n; }
+  ol li { counter-increment: n; position: relative; padding: 0 0 8px 34px; }
+  ol li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+                  background: var(--mark); color: #fff; font-weight: 700; font-size: 13px; line-height: 22px; text-align: center; }
+  .note { color: var(--soft); font-size: 14px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Repo mode settings</h1>
+  <p class="lead">The settings from the Mode box down, with Mode set to Repo. The model fields above it did not change and are left out.
+    Both pictures are Debug builds showing the settings inside the window with sample data; in the app they open as a flyout from the gear and scroll, so the Save button below the last control is cut off here.</p>
+  <div class="pair">
+    <section class="side">
+      <h3>Before</h3>
+      <img src="261005-repo-mode-before.png" alt="Repo mode with a Repository folder box and separate Azure DevOps organization URL and project boxes">
+      <ol>
+        <li>Repo mode replaced Simple mode: questions about a repository were answered, but statements were no longer fact-checked.</li>
+        <li>The repository could only be a folder on this PC.</li>
+        <li>The Azure DevOps organization had to be typed.</li>
+        <li>So did the project (and, below it, the token). Nothing told you whether any of it worked.</li>
+      </ol>
+    </section>
+    <section class="side">
+      <h3>After</h3>
+      <img src="261005-repo-mode-after.png" alt="Repo mode with one Repository box for a URL or folder, an access token box and a Test repository button">
+      <ol>
+        <li>Repo mode is Simple mode plus the repository: statements are still fact-checked, and a sentence that names a file or entity gets a code-research card.</li>
+        <li>One box takes either an Azure DevOps git URL or a folder (Browse still picks a folder). A URL is cloned into the app's own cache and refreshed on every start.</li>
+        <li>The access token is the only other thing to enter. The organization and project are read from the URL, or from where the folder was cloned from.</li>
+        <li>Test repository checks what is typed: a folder is opened, a URL is asked for its branches using the token, and the result is shown next to the button.</li>
+      </ol>
+    </section>
+  </div>
+</main>
+</body>
+</html>

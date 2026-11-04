@@ -2,8 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
-using PoVoiceHud.Core.Providers;
-using PoVoiceHud.Core.Providers.FactCheck;
+using PoVoiceHud.Core.Models;
 
 namespace PoVoiceHud.Core.Screen;
 

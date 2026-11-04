@@ -14,6 +14,10 @@
     <!-- The installer's version: build/pack.ps1 reads it from here. -->
     <Version>1.1.0</Version>
     <ApplicationIcon>Assets\PoVoiceHud.ico</ApplicationIcon>
+    <!-- Trimming and Native AOT analyzers, as Core has: what would break a trimmed or AOT publish fails the build here. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="Assets\PoVoiceHud.ico" CopyToOutputDirectory="PreserveNewest" />

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoVoiceHud — simpler HUD and settings (2026-10-05)</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1b1b1f; --soft: #5c5f66; --line: #d9dbe0; --bg: #f6f7f9; --card: #ffffff; --mark: #c81e2d; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #ececf1; --soft: #a3a7b0; --line: #34363c; --bg: #17181b; --card: #212327; } }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 40px 0 12px; }
+  h3 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  p.lead { color: var(--soft); margin: 0 0 8px; max-width: 80ch; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+  .side { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .side img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  ol { margin: 14px 0 0; padding: 0; list-style: none; counter-reset: n; }
+  ol li { counter-increment: n; position: relative; padding: 0 0 8px 34px; }
+  ol li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+                  background: var(--mark); color: #fff; font-weight: 700; font-size: 13px; line-height: 22px; text-align: center; }
+  .note { color: var(--soft); font-size: 14px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Simpler HUD and settings</h1>
+  <p class="lead">Seven of the ten simplification ideas, applied: no repeated claim, repeats merged, a history list, shorter status, no chevron, no Save button, and settings folded down to a model line and an optional repository.
+    All pictures are Debug builds with sample data, at 150 % display scaling. The red numbers match the notes under each picture.</p>
+
+  <h2>1. The HUD</h2>
+  <div class="pair">
+    <section class="side">
+      <h3>Before</h3>
+      <img src="261005-simplify-hud-before.png" alt="The old HUD: pill with a FACT headline and a chevron, a card repeating the claim, and a row of side-scrolling cards">
+      <ol>
+        <li>The pill showed the source tag and the claim, but not the verdict. Status text read "Mic · Fact check · Listening (mic)".</li>
+        <li>A chevron button, although clicking the pill already opens and closes the panel.</li>
+        <li>The card repeated the claim as its title, under the same words in the pill.</li>
+        <li>Earlier cards scrolled sideways and ran off the right edge.</li>
+        <li>Saying something twice made two cards.</li>
+      </ol>
+    </section>
+    <section class="side">
+      <h3>After</h3>
+      <img src="261005-simplify-hud-after.png" alt="The new HUD: pill with the verdict and claim, a card with only the reason, and a one-line history list">
+      <ol>
+        <li>The pill carries the verdict and the claim. When there is no card it says just "Listening" (or "Listening to you and the call" with a repository).</li>
+        <li>No chevron: click the pill, or press Ctrl+E, to open or close the panel. Esc still closes it.</li>
+        <li>The card holds only what the pill cannot: the reason, the link and copy.</li>
+        <li>Something said again is the same line with a count ("×2"), not a second card.</li>
+        <li>Earlier cards are one line each. Click a line to make it the main card; hover for its answer.</li>
+      </ol>
+    </section>
+  </div>
+
+  <h2>2. Settings</h2>
+  <div class="pair">
+    <section class="side">
+      <h3>Before</h3>
+      <img src="261005-simplify-settings-before.png" alt="The old settings: four model fields, a Test button, a Mode dropdown and a Save button">
+      <ol>
+        <li>Four model fields on show every time, even though they are set once.</li>
+        <li>A Mode dropdown to choose between Simple and Repo.</li>
+        <li>A Save button to press before anything took effect.</li>
+      </ol>
+    </section>
+    <section class="side">
+      <h3>After</h3>
+      <img src="261005-simplify-settings-after.png" alt="The new settings: one line naming the model with a Change button, and an optional Repository box">
+      <ol>
+        <li>A model that is set up is one line. Change… unfolds the same fields as before (next picture).</li>
+        <li>No Mode dropdown. Filling in a repository is what turns on the call audio and the answers from the code; leaving it empty is the simple fact-checking mode.</li>
+        <li>No Save button. Changes apply when the panel closes. If something typed is invalid, nothing is changed and the pill says why.</li>
+      </ol>
+    </section>
+  </div>
+
+  <h2>3. Settings with everything unfolded</h2>
+  <div class="pair">
+    <section class="side">
+      <h3>After pressing Change… and entering a repository</h3>
+      <img src="261005-simplify-settings-unfolded.png" alt="The settings with the model fields unfolded and a repository entered, showing the token box and Test repository">
+      <ol>
+        <li>The model fields and Test, exactly as they were. They fold back to one line once a working model has been applied.</li>
+        <li>The access token and Test repository appear only once a repository is entered.</li>
+        <li>The one line of explanation, in place of the Mode description and the Save button.</li>
+      </ol>
+      <p class="note">The endpoint is blanked in the pictures because it names a private Azure resource.
+        These pictures show the settings inside the window (a Debug-only view); in the app they open as a flyout from the gear.</p>
+    </section>
+  </div>
+</main>
+</body>
+</html>

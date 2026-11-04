@@ -1,5 +1,6 @@
 using PoVoiceHud.Core.Config;
 
+
 namespace PoVoiceHud.Core.Tests.Config;
 
 [Trait("Category", "Integration")]
