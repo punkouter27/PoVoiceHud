@@ -6,17 +6,12 @@ using PoVoiceHud.Core.Meetings;
 using PoVoiceHud.Core.Models;
 using PoVoiceHud.Core.Transcription;
 
-
-
-
-
-
-
 namespace PoVoiceHud.Core.Config;
 
 /// <summary>
 /// Edits <see cref="Settings"/> plus three secrets: where claims are checked (Azure's endpoint and key, a local model, or
-/// both), the optional code repository and its access token, the Whisper model, the chat webhook, then the switches. Nothing changes until <see cref="ApplyCommand"/>, which first makes one real call to the model
+/// both), the optional code repository and its access token, the Whisper model, the cue volume and the chat webhook. The on/off
+/// behaviours are not here: they keep what settings.json says (their defaults unless edited there). Nothing changes until <see cref="ApplyCommand"/>, which first makes one real call to the model
 /// whenever the endpoint or key changed (or setup is needed), and reads a new repository, so a wrong one is caught here.
 /// <see cref="CancelCommand"/> puts back what was applied. A secret is written only when typed (blank keeps the stored one).
 /// </summary>
@@ -39,22 +34,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string? _repository;
     [ObservableProperty] private string _repositoryToken = "";
     [ObservableProperty] private bool _hasRepositoryToken;
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(LookUpNote))] private bool _lookUpClaims;
-    [ObservableProperty] private bool _startWithWindows;
-    [ObservableProperty] private bool _sounds;
     /// <summary>How loud the cues are, 0–100.</summary>
     [ObservableProperty] private double _cueVolume;
-    [ObservableProperty] private bool _callsOnly;
-    [ObservableProperty] private bool _watchScreen;
     /// <summary>Which of <see cref="ModelModes"/>: Azure, Azure then the local model, or the local model only.</summary>
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(UsesAzure), nameof(UsesLocal))] private int _modelMode;
     [ObservableProperty] private string? _localEndpoint;
     [ObservableProperty] private string? _localModel;
     /// <summary>Which of <see cref="WhisperModels.All"/>.</summary>
     [ObservableProperty] private int _whisperModel;
-    [ObservableProperty] private bool _useGpu;
-    [ObservableProperty] private bool _separateSpeakers;
-    [ObservableProperty] private bool _offerToShare;
     [ObservableProperty] private string _shareWebhook = "";
     [ObservableProperty] private bool _hasShareWebhook;
     /// <summary>
@@ -78,12 +65,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _endpoint = settings.FoundryEndpoint;
         _repository = settings.Repository;
         _hasRepositoryToken = readSecret(CredentialStore.RepoToken) is not null;
-        _lookUpClaims = settings.LookUpClaims;
-        _startWithWindows = settings.StartWithWindows;
-        _sounds = settings.Sounds;
         _cueVolume = settings.CueVolume;
-        _callsOnly = settings.CallsOnly;
-        _watchScreen = settings.WatchScreen;
         _hasKey = readSecret(CredentialStore.FoundryKey) is not null;
         _hasShareWebhook = readSecret(CredentialStore.ShareWebhook) is not null;
         Load(settings);
@@ -99,16 +81,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool UsesAzure => (ModelMode)ModelMode != Config.ModelMode.Local;
     public bool UsesLocal => (ModelMode)ModelMode != Config.ModelMode.Azure;
 
-    /// <summary>The settings for the model, Whisper, voices and sharing, which Revert puts back too.</summary>
+    /// <summary>The settings for the model and Whisper, which Revert puts back too.</summary>
     private void Load(Settings settings)
     {
         ModelMode = (int)settings.ModelMode;
         LocalEndpoint = settings.LocalEndpoint;
         LocalModel = settings.LocalModel;
         WhisperModel = Math.Max(0, WhisperModels.All.ToList().FindIndex(m => m.Id == WhisperModels.Find(settings.WhisperModel).Id));
-        UseGpu = settings.UseGpu;
-        SeparateSpeakers = settings.SeparateSpeakers;
-        OfferToShare = settings.OfferToShare;
     }
 
     /// <summary>The build's date (YYMMDD) and version, in the page's corner.</summary>
@@ -117,28 +96,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Applied or cancelled: the window leaves the settings.</summary>
     public event Action? Done;
 
-    /// <summary>What the Wikipedia switch means for privacy.</summary>
-    public string LookUpNote => LookUpClaims
-        ? "The key words of each claim go to Wikipedia's and Wikidata's search (and, for a claim about the present, a news search), and the verdict can link what it used."
-        : "Claims are judged from the model's own knowledge; nothing goes to Wikipedia, Wikidata or the news search.";
-
     public Settings ToSettings() => _original with
     {
         FoundryEndpoint = Blank(Endpoint),
         Repository = Blank(Repository),
-        LookUpClaims = LookUpClaims,
-        StartWithWindows = StartWithWindows,
-        Sounds = Sounds,
         CueVolume = (int)Math.Round(Math.Clamp(CueVolume, 0, 100)),
-        CallsOnly = CallsOnly,
-        WatchScreen = WatchScreen,
         ModelMode = (ModelMode)Math.Clamp(ModelMode, 0, ModelModes.Count - 1),
         LocalEndpoint = Blank(LocalEndpoint),
         LocalModel = Blank(LocalModel),
         WhisperModel = WhisperModels.All[Math.Clamp(WhisperModel, 0, WhisperModels.All.Count - 1)].Id,
-        UseGpu = UseGpu,
-        SeparateSpeakers = SeparateSpeakers,
-        OfferToShare = OfferToShare,
     };
 
     /// <summary>The endpoint or key cannot be used (or was never set): the app stays in Settings until Apply succeeds.</summary>
@@ -155,12 +121,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Key = "";
         Repository = _original.Repository;
         RepositoryToken = "";
-        LookUpClaims = _original.LookUpClaims;
-        StartWithWindows = _original.StartWithWindows;
-        Sounds = _original.Sounds;
         CueVolume = _original.CueVolume;
-        CallsOnly = _original.CallsOnly;
-        WatchScreen = _original.WatchScreen;
         ShareWebhook = "";
         Load(_original);
         if (!RequiresSetup) Message = "";
@@ -282,7 +243,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             ShareWebhook = "";
             found.Add($"✓ Summaries can be posted to {SummaryShare.NameOf(new Uri(webhook))}.");
         }
-        if (settings.UseGpu != _original.UseGpu) found.Add("✓ Saved. The graphics card switch takes effect the next time PoVoiceHud starts.");
         _original = settings;
         RequiresSetup = false;
         Message = string.Join("\n", found);

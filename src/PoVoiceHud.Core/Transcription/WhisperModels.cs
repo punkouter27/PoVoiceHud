@@ -11,6 +11,8 @@ public sealed record WhisperModel(string Id, string Label, string File, string S
 public static class WhisperModels
 {
     public const string Default = "base.en";
+    /// <summary>The default for a new settings.json: large-v3 turbo, best on a graphics card.</summary>
+    public const string MostAccurate = "large-v3-turbo";
 
     private const string Commit = "5359861c739e955e79d9a303bcbc70fb988958b1";
 

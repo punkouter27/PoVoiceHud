@@ -26,13 +26,14 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
-    public void Missing_file_gives_defaults_with_wikipedia_and_sounds()
+    public void Missing_file_gives_the_fixed_behaviours()
     {
         var (loaded, warning) = SettingsStore.Load(File_);
 
         Assert.Equal(new Settings(), loaded);
         Assert.Null(warning);
-        Assert.True(loaded.LookUpClaims && loaded.Sounds);
+        Assert.Equal((true, true, true, true, true, true), (loaded.LookUpClaims, loaded.Sounds, loaded.CallsOnly, loaded.WatchScreen, loaded.UseGpu, loaded.SeparateSpeakers));
+        Assert.Equal((false, false, 100, "large-v3-turbo"), (loaded.StartWithWindows, loaded.OfferToShare, loaded.CueVolume, loaded.WhisperModel));
         Assert.InRange(loaded.WhisperThreads, 2, 8);
     }
 

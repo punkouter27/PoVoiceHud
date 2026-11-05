@@ -53,55 +53,21 @@
                 <TextBlock Style="{StaticResource HudCaption}" TextWrapping="Wrap"
                            Text="A claim that names a file or class in one is checked against that code. Up to three matching files (the first 6,000 characters of each) go to the model with the claim. A URL is cloned to this PC and refreshed at each start; a private one needs a GitHub or Azure DevOps personal access token with read access to code (one token for all)." />
 
-                <!-- 3. The switches, two by two. The longer explanations are in the tooltips. The call is always heard too. -->
-                <Grid ColumnSpacing="12" RowSpacing="2" Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <ToggleSwitch Header="Look claims up" IsOn="{x:Bind ViewModel.LookUpClaims, Mode=TwoWay}" MinWidth="0"
-                                  AutomationProperties.HelpText="{x:Bind ViewModel.LookUpNote, Mode=OneWay}"
-                                  ToolTipService.ToolTip="{x:Bind ViewModel.LookUpNote, Mode=OneWay}" />
-                    <ToggleSwitch Grid.Row="1" Header="Start with Windows" IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" MinWidth="0" />
-                    <ToggleSwitch Grid.Row="2" Header="Listen only during calls" IsOn="{x:Bind ViewModel.CallsOnly, Mode=TwoWay}" MinWidth="0"
-                                  ToolTipService.ToolTip="Hear nothing until Teams, Zoom, Slack, Webex, Discord or a browser call has the microphone open, and stop when the call ends" />
-                    <ToggleSwitch Grid.Column="1" Header="Sounds and animations" IsOn="{x:Bind ViewModel.Sounds, Mode=TwoWay}" MinWidth="0"
-                                  ToolTipService.ToolTip="A short cue for each verdict, answer and mute (each under a quarter of a second, so call audio never transcribes it), and the highlights moving" />
-                    <Slider Grid.Column="1" Grid.Row="1" Grid.RowSpan="2" Header="Cue volume" Minimum="0" Maximum="100" StepFrequency="5"
-                            Value="{x:Bind ViewModel.CueVolume, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.Sounds, Mode=OneWay}" VerticalAlignment="Top" />
-                    <ToggleSwitch Grid.Row="3" Header="Watch the screen" IsOn="{x:Bind ViewModel.WatchScreen, Mode=TwoWay}" MinWidth="0"
-                                  ToolTipService.ToolTip="Every 3 seconds the monitor you are working on is captured; when it has changed, the model describes it, and what is said is checked against what is shown, on the Screen facts page. Pictures go to your Foundry resource and are never saved. The HUD is hidden from captures and screen sharing while this is on." />
-                </Grid>
+                <!-- 3. How loud the cues are. Everything else is fixed: claims looked up, sounds and animations on, listening only
+                     during calls, the screen watched, the graphics card used, voices told apart (settings.json can change them). -->
+                <Slider Header="Cue volume" Minimum="0" Maximum="100" StepFrequency="5" Value="{x:Bind ViewModel.CueVolume, Mode=TwoWay}" Margin="0,4,0,0"
+                        ToolTipService.ToolTip="A short cue for each verdict, answer and mute, each under a quarter of a second so call audio never transcribes it" />
 
-                <!-- 4. Advanced, folded away: what most people never change (the Whisper model, the graphics card, voices, sharing).
-                     The rarest settings (threads, vocabulary, language, update feed) are in settings.json only; the README lists them. -->
-                <Expander Header="Advanced: transcription, voices, sharing" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                <!-- 4. Advanced, folded away: the Whisper model and where meeting summaries can be posted -->
+                <Expander Header="Advanced: transcription, sharing" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                           Margin="0,4,0,0" IsExpanded="False">
                     <StackPanel Spacing="10">
                         <ComboBox Header="Transcription" ItemsSource="{x:Bind config:SettingsViewModel.WhisperModelNames}" HorizontalAlignment="Stretch"
                                   SelectedIndex="{x:Bind ViewModel.WhisperModel, Mode=TwoWay}"
-                                  ToolTipService.ToolTip="Whisper runs on this PC. A bigger model hears names and numbers better and takes longer per sentence; it is downloaded once, when applied." />
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <ToggleSwitch Header="Use the graphics card" IsOn="{x:Bind ViewModel.UseGpu, Mode=TwoWay}" MinWidth="0"
-                                          ToolTipService.ToolTip="Runs Whisper on the graphics card through Vulkan (NVIDIA, AMD or Intel); the CPU is used when there is none. Takes effect at the next start." />
-                            <ToggleSwitch Grid.Column="1" Header="Tell voices apart" IsOn="{x:Bind ViewModel.SeparateSpeakers, Mode=TwoWay}" MinWidth="0"
-                                          ToolTipService.ToolTip="Each voice on the call gets its own name: Them, Them 2, Them 3. Type names under Live as a list (Alex, Sam) to name them in the order they spoke. A speaker model (26 MB) runs on this PC; no audio leaves it." />
-                        </Grid>
-                        <!-- Sharing a meeting's summary: a chat channel's incoming webhook, or an email draft without one -->
+                                  ToolTipService.ToolTip="Whisper runs on this PC, on the graphics card when there is one. A bigger model hears names and numbers better and takes longer per sentence; it is downloaded once, when applied." />
+                        <!-- Where History's Share posts a day's summary: a chat channel's incoming webhook, or an email draft without one -->
                         <PasswordBox Header="Chat webhook for meeting summaries" Password="{x:Bind ViewModel.ShareWebhook, Mode=TwoWay}"
                                      PlaceholderText="{x:Bind local:SettingsView.WebhookPlaceholder(ViewModel.HasShareWebhook), Mode=OneWay}" />
-                        <ToggleSwitch Header="Offer to share when a meeting ends" IsOn="{x:Bind ViewModel.OfferToShare, Mode=TwoWay}" MinWidth="0"
-                                      ToolTipService.ToolTip="When you mute after a meeting, or the call ends, that meeting is summed up and the window offers to post it to the webhook (Slack, a Teams workflow, Discord) or, without one, to email it. Nothing is sent until you press the button." />
                     </StackPanel>
                 </Expander>
             </StackPanel>

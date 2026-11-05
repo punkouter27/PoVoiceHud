@@ -13,8 +13,11 @@ public enum ModelMode
 }
 
 /// <summary>
-/// Everything in settings.json. The Settings panel shows all of it except <see cref="WhisperThreads"/>,
-/// <see cref="WhisperLanguage"/>, <see cref="Vocabulary"/> and <see cref="UpdateFeed"/>, which are for the file only. Changed with <c>with</c>, never in
+/// Everything in settings.json. The Settings page has the model, the repositories, the Whisper model and the cue volume; the
+/// on/off behaviours (<see cref="UseGpu"/>, <see cref="SeparateSpeakers"/>, <see cref="OfferToShare"/>, <see cref="LookUpClaims"/>,
+/// <see cref="StartWithWindows"/>, <see cref="WatchScreen"/>, <see cref="Sounds"/>, <see cref="CallsOnly"/>) are fixed at their defaults
+/// and changed only in the file, as are <see cref="WhisperThreads"/>, <see cref="WhisperLanguage"/>, <see cref="Vocabulary"/> and
+/// <see cref="UpdateFeed"/>. Changed with <c>with</c>, never in
 /// place; the setters are plain <c>set</c> rather than <c>init</c> because the generated JSON reader (<see cref="CoreJson"/>)
 /// fills every init property, so a key missing from the file would lose its default instead of keeping it.
 /// </summary>
@@ -29,13 +32,13 @@ public sealed record Settings
     /// <summary>The local model's name as its server knows it, such as qwen2.5:7b.</summary>
     public string? LocalModel { get; set; }
     /// <summary>Which Whisper model transcribes (<see cref="Transcription.WhisperModels"/>): bigger is more accurate and slower.</summary>
-    public string WhisperModel { get; set; } = Transcription.WhisperModels.Default;
+    public string WhisperModel { get; set; } = Transcription.WhisperModels.MostAccurate;
     /// <summary>Runs Whisper on the graphics card (Vulkan) when there is one that can; the CPU otherwise. Takes effect at the next start.</summary>
     public bool UseGpu { get; set; } = true;
     /// <summary>Tells the voices on the call apart ("Them 1", "Them 2") with a speaker model run on this PC.</summary>
     public bool SeparateSpeakers { get; set; } = true;
     /// <summary>After a meeting is summed up, offer to post the summary to the chat webhook (its URL is in Credential Manager).</summary>
-    public bool OfferToShare { get; set; } = true;
+    public bool OfferToShare { get; set; }
     /// <summary>Looks each claim up on Wikipedia before the model judges it, so the verdict can cite a real article.</summary>
     public bool LookUpClaims { get; set; } = true;
     /// <summary>
@@ -48,7 +51,7 @@ public sealed record Settings
     /// Captures the monitor in use every few seconds and, when it has changed, has the model describe it, so what is said can be
     /// checked against what is shown. The pictures go to the Foundry resource and are never saved; the descriptions are logged.
     /// </summary>
-    public bool WatchScreen { get; set; }
+    public bool WatchScreen { get; set; } = true;
     /// <summary>Short cues for verdicts and mute (each under the 300 ms the segmenter ignores) and the highlight's fade.</summary>
     public bool Sounds { get; set; } = true;
     /// <summary>How loud the cues are, 0–100.</summary>
@@ -57,7 +60,7 @@ public sealed record Settings
     /// Listen only while a call app (Teams, Zoom, Slack, a browser call…) is using the microphone; otherwise the app waits,
     /// hearing nothing.
     /// </summary>
-    public bool CallsOnly { get; set; }
+    public bool CallsOnly { get; set; } = true;
     /// <summary>Half the logical cores, 2–8: beyond 8 Whisper gains little, and all cores would starve the call itself.</summary>
     public int WhisperThreads { get; set; } = Math.Clamp(Environment.ProcessorCount / 2, 2, 8);
     /// <summary>What Whisper listens for: "en", another ISO code, or "auto" to detect it. Only a multilingual model (large-v3 turbo) can do more than English.</summary>

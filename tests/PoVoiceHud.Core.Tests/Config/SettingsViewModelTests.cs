@@ -62,9 +62,7 @@ public class SettingsViewModelTests
         Assert.Equal(Endpoint, vm.Endpoint);
         Assert.True(vm.HasKey);
         Assert.Equal("", vm.Key);
-        Assert.False(vm.Sounds);
-        Assert.True(vm.LookUpClaims);
-        Assert.Contains("Wikipedia's and Wikidata's search", vm.LookUpNote);
+        Assert.False(vm.ToSettings().Sounds);   // no switch on the page: what the file says is kept
 
         _secrets.Clear();
         Assert.False(Build().HasKey);
@@ -78,23 +76,23 @@ public class SettingsViewModelTests
 
         vm.Endpoint = Endpoint;
         vm.Key = "new-key";
-        vm.LookUpClaims = false;
+        vm.CueVolume = 40;
         await vm.ApplyCommand.ExecuteAsync(null);
 
         Assert.Equal((new Uri(Endpoint), "new-key"), Assert.Single(_connections));   // the typed key is what gets checked
         Assert.NotNull(_saved);
         Assert.Equal("new-key", _keyWhenSaved);   // applying the settings builds a checker, which reads the key
         Assert.Equal(Endpoint, _saved.FoundryEndpoint);
-        Assert.False(_saved.LookUpClaims);
+        Assert.Equal(40, _saved.CueVolume);
         Assert.True(vm.HasKey);
         Assert.Equal("", vm.Key);
         Assert.Equal("✓ Connected — gpt-4.1-mini answered.", vm.Message);
         Assert.Equal(1, _done);
         Assert.False(vm.ApplyCommand.CanExecute(null));   // the applied state is the new baseline
 
-        vm.Sounds = false;                                // a switch alone needs no new connection check
+        vm.CueVolume = 60;                                // the volume alone needs no new connection check
         await vm.ApplyCommand.ExecuteAsync(null);
-        Assert.False(_saved.Sounds);
+        Assert.Equal(60, _saved.CueVolume);
         Assert.Single(_connections);
     }
 
@@ -196,12 +194,12 @@ public class SettingsViewModelTests
         var vm = Build(new Settings { FoundryEndpoint = Endpoint });
         vm.Endpoint = "https://other.services.ai.azure.com";
         vm.Key = "typed";
-        vm.Sounds = false;
+        vm.CueVolume = 10;
 
         vm.CancelCommand.Execute(null);
         Assert.Equal(Endpoint, vm.Endpoint);
         Assert.Equal("", vm.Key);
-        Assert.True(vm.Sounds);
+        Assert.Equal(100, vm.CueVolume);
         Assert.Equal(1, _done);
         Assert.Null(_saved);
 
