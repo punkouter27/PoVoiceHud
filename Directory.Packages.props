@@ -19,8 +19,8 @@
     <!-- The optional code repository: clone, fetch and index (LibGit2Sharp), and matching spoken names to files (FuzzySharp) -->
     <PackageVersion Include="LibGit2Sharp" Version="0.32.0" />
     <PackageVersion Include="Raffinert.FuzzySharp" Version="2.0.3" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
     <!-- Tests -->
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
