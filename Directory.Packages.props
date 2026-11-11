@@ -1,29 +1,29 @@
 <Project>
   <ItemGroup>
     <!-- UI -->
-    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
     <PackageVersion Include="WinUIEx" Version="2.9.3" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <!-- Installer and updates (unpackaged, so no MSIX) -->
     <PackageVersion Include="Velopack" Version="1.2.161" />
     <!-- Audio / inference -->
-    <PackageVersion Include="NAudio.Core" Version="2.3.0" />
-    <PackageVersion Include="NAudio.Wasapi" Version="2.3.0" />
-    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.30.0" />
+    <PackageVersion Include="NAudio.Core" Version="2.4.0" />
+    <PackageVersion Include="NAudio.Wasapi" Version="2.4.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.31.1" />
     <PackageVersion Include="Whisper.net" Version="1.9.1" />
     <PackageVersion Include="Whisper.net.Runtime" Version="1.9.1" />
     <!-- Whisper on the graphics card, any vendor with a Vulkan driver; the CPU runtime above is the fallback -->
     <PackageVersion Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
     <!-- Helpers -->
-    <PackageVersion Include="Polly.Core" Version="8.7.0" />
+    <PackageVersion Include="Polly.Core" Version="8.9.1" />
     <!-- The optional code repository: clone, fetch and index (LibGit2Sharp), and matching spoken names to files (FuzzySharp) -->
     <PackageVersion Include="LibGit2Sharp" Version="0.32.0" />
     <PackageVersion Include="Raffinert.FuzzySharp" Version="2.0.3" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.15" />
     <!-- Tests -->
-    <PackageVersion Include="xunit.v3" Version="4.0.1" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.2" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
   </ItemGroup>
 </Project>
