@@ -18,7 +18,7 @@
     <PackageVersion Include="Polly.Core" Version="8.7.0" />
     <!-- The optional code repository: clone, fetch and index (LibGit2Sharp), and matching spoken names to files (FuzzySharp) -->
     <PackageVersion Include="LibGit2Sharp" Version="0.32.0" />
-    <PackageVersion Include="Raffinert.FuzzySharp" Version="2.0.3" />
+    <PackageVersion Include="Raffinert.FuzzySharp" Version="6.0.1" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
